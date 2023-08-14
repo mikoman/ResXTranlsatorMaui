@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+              xmlns:local="clr-namespace:ResXTranslator"
+             x:Class="ResXTranslator.MainPage"
+             WidthRequest="1280">
+
+    <StackLayout Margin="20">
+        <Picker x:Name="LanguagePicker" Grid.Column="0" VerticalOptions="Center" HorizontalOptions="Center"
+                    SelectedItem="{Binding SelectedLanguage}"/>
+        <Button Text="Select ResX File" Clicked="OnFilePickerButtonClicked"/>
+        <Button Text="Translate" Clicked="OnTranslateButtonClicked"/>
+        <Label x:Name="StatusLabel" Text="Status"/>
+        <ProgressBar x:Name="translationProgressBar" Progress="0" />
+        <Button Text="Export to Excel" Clicked="SaveToExcelButtonClicked"/>
+
+    </StackLayout>
+
+</ContentPage>
