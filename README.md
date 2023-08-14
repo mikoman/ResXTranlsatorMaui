@@ -1,6 +1,6 @@
 # ResXTranslator
 
-ResXTranslator is a straightforward and UI-based .resx file translator designed for simplicity and efficiency. While its core functionality is tailored to specific needs, it can be effortlessly adapted to support a broader range of languages or additional features.
+ResXTranslator is a straightforward and UI-based .resx file translator designed for simplicity and efficiency. While its core functionality is tailored to specific needs, it can be effortlessly adapted to support a broader range of languages or additional features. The design is basic barely enough to be functional. Code structure is also hacky as it was done for a quick translation. You can change the list of languages using the CultureInfo class to populate the picker if you need to do so. 
 
 ## Features
 
