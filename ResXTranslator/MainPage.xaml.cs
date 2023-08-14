@@ -7,7 +7,7 @@ public partial class MainPage : ContentPage
     private string _selectedResXFilePath;
 
     public string SelectedLanguage { get; set; }
-    string authKey = "29ea5c64-9567-b0e1-def2-f9801f1b1909:fx";
+    string authKey = "your depl api key here";
     public MainPage()
     {
         InitializeComponent();
