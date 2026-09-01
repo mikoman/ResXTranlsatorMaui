@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/assets/resxtranslator-mark.svg" width="112" alt="ResXTranslator logo">
+  <img src="docs/assets/resxtranslator-mark.svg" width="112" alt="ResXTranslator localization prism logo">
 
   # ResXTranslator
 
