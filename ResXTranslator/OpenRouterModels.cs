@@ -22,9 +22,17 @@ sealed record OpenRouterModel(
     string Id,
     string Name,
     decimal? PromptPricePerToken,
-    decimal? CompletionPricePerToken)
+    decimal? CompletionPricePerToken,
+    bool SupportsReasoning = false,
+    bool RequiresReasoning = false)
 {
     public string Provider => Id.Contains('/') ? Id[..Id.IndexOf('/')] : Id;
+
+    public bool IsDefinitelyFree => PromptPricePerToken == 0 && CompletionPricePerToken == 0;
+
+    public bool IsDefinitelyPaid => PromptPricePerToken is > 0 || CompletionPricePerToken is > 0;
+
+    public int ParallelRequestLimit => IsDefinitelyPaid ? 4 : 2;
 
     public string PriceDescription
     {
@@ -58,16 +66,64 @@ sealed record OpenRouterTranslationInput(int Id, string Text);
 
 readonly record struct OpenRouterTokenUsage(int PromptTokens, int CompletionTokens, int TotalTokens)
 {
+    public int ReasoningTokens { get; init; }
+
     public static OpenRouterTokenUsage operator +(OpenRouterTokenUsage left, OpenRouterTokenUsage right) =>
         new(
             left.PromptTokens + right.PromptTokens,
             left.CompletionTokens + right.CompletionTokens,
-            left.TotalTokens + right.TotalTokens);
+            left.TotalTokens + right.TotalTokens)
+        {
+            ReasoningTokens = left.ReasoningTokens + right.ReasoningTokens
+        };
 }
+
+enum OpenRouterTranslationStage
+{
+    Sending,
+    WaitingForResponse,
+    ProviderConnected,
+    ReceivingResponse,
+    ValidatingResponse,
+    Retrying,
+    Completed,
+    Failed
+}
+
+readonly record struct OpenRouterTranslationProgress(
+    string RequestId,
+    OpenRouterTranslationStage Stage,
+    TimeSpan Elapsed,
+    long ResponseBytes,
+    int ResponseCharacters,
+    int AttemptNumber = 1,
+    int MaximumAttempts = 5);
 
 sealed record OpenRouterTranslationBatch(
     IReadOnlyDictionary<int, string> Translations,
     OpenRouterTokenUsage Usage);
+
+sealed class OpenRouterProviderException : Exception
+{
+    public OpenRouterProviderException(
+        string requestId,
+        string providerName,
+        string message,
+        Exception innerException,
+        OpenRouterTokenUsage usage)
+        : base(message, innerException)
+    {
+        RequestId = requestId;
+        ProviderName = providerName;
+        Usage = usage;
+    }
+
+    public string RequestId { get; }
+
+    public string ProviderName { get; }
+
+    public OpenRouterTokenUsage Usage { get; }
+}
 
 sealed class OpenRouterApiException : Exception
 {

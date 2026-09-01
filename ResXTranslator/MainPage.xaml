@@ -19,7 +19,7 @@
     a model and a language; understands what will be written and where; presses
     Translate once; watches animated batch-by-batch progress; ends with a result
     they can reveal in Finder.
-    FIRST VIEWPORT: A 552pt centred column in a compact 620pt window. No nav bar;
+    FIRST VIEWPORT: A 648pt centred column in a 720 × 680pt utility window. No nav bar;
     the name lives in the title bar. SOURCE card, then OPENROUTER card, then the
     filled Translate button with both exports as plain tinted text. Credentials
     and the searchable catalog live in focused sheets, never inline clutter.
@@ -32,7 +32,7 @@
     <ScrollView x:Name="MainScrollView">
         <VerticalStackLayout Padding="0,26,0,32"
                              Spacing="22"
-                             WidthRequest="552"
+                             WidthRequest="648"
                              HorizontalOptions="Center">
 
             <!-- ============ SOURCE ============ -->
@@ -280,9 +280,22 @@
                         </Grid>
                     </Border>
                     <Label x:Name="ProgressLabel"
-                           Style="{StaticResource RowValue}"
+                           Style="{StaticResource StatusTitle}"
                            LineBreakMode="WordWrap"
                            MaxLines="2" />
+                    <Label x:Name="ProgressDetailLabel"
+                           Style="{StaticResource RowFooter}"
+                           LineBreakMode="WordWrap"
+                           MaxLines="6"
+                           SemanticProperties.Description="Live translation request status" />
+                    <controls:ActionButton x:Name="CancelTranslationButton"
+                                           Text="Cancel Translation"
+                                           Prominence="Plain"
+                                           Accent="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource DangerDark}}"
+                                           FontSize="12"
+                                           HorizontalOptions="Start"
+                                           IsVisible="False"
+                                           Clicked="OnCancelTranslationClicked" />
                 </VerticalStackLayout>
 
                 <Grid x:Name="ResultGroup"
@@ -303,6 +316,15 @@
                         <VerticalStackLayout x:Name="ResultFileList" Spacing="2" IsVisible="False" />
                     </VerticalStackLayout>
                 </Grid>
+
+                <controls:ActionButton x:Name="RevealLogButton"
+                                       Text="Open Diagnostics Log"
+                                       Prominence="Plain"
+                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                       FontSize="11"
+                                       HorizontalOptions="Start"
+                                       Clicked="OnRevealLogClicked"
+                                       SemanticProperties.Description="Open the redacted ResXTranslator diagnostics log" />
             </VerticalStackLayout>
 
         </VerticalStackLayout>

@@ -91,10 +91,10 @@
                         <DataTemplate>
                             <VerticalStackLayout Spacing="0">
                                 <Grid ColumnDefinitions="*,Auto"
-                                      RowDefinitions="Auto,Auto,Auto"
+                                      RowDefinitions="Auto,Auto,Auto,Auto"
                                       RowSpacing="1"
                                       Padding="14,9"
-                                      MinimumHeightRequest="62">
+                                      MinimumHeightRequest="72">
                                     <Label Text="{Binding Name}"
                                            Style="{StaticResource RowTitle}"
                                            LineBreakMode="TailTruncation" />
@@ -106,8 +106,13 @@
                                            Text="{Binding PriceDescription}"
                                            Style="{StaticResource RowFooter}"
                                            LineBreakMode="TailTruncation" />
+                                    <Label Grid.Row="3"
+                                           Text="{Binding ReasoningDescription}"
+                                           Style="{StaticResource RowFooter}"
+                                           LineBreakMode="TailTruncation"
+                                           IsVisible="{Binding RequiresReasoning}" />
                                     <controls:SymbolImage Grid.Column="1"
-                                                          Grid.RowSpan="3"
+                                                          Grid.RowSpan="4"
                                                           Symbol="checkmark"
                                                           PointSize="14"
                                                           Bold="True"

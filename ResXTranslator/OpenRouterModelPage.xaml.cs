@@ -220,6 +220,9 @@ partial class OpenRouterModelPage : ModalSheetPage
     {
         public string Name => Model.Name;
         public string Id => Model.Id;
-        public string PriceDescription => Model.PriceDescription;
+        public string PriceDescription =>
+            $"{Model.PriceDescription} · {Model.ParallelRequestLimit} parallel requests";
+        public bool RequiresReasoning => Model.RequiresReasoning;
+        public string ReasoningDescription => "Reasoning required · excluded from response";
     }
 }

@@ -20,10 +20,10 @@ namespace ResXTranslator.Controls;
 /// </remarks>
 static class WindowGeometry
 {
-    public const double PreferredWidth = 620;
-    public const double PreferredHeight = 476;
-    public const double MinimumWidth = 600;
-    public const double MinimumHeight = 440;
+    public const double PreferredWidth = 720;
+    public const double PreferredHeight = 680;
+    public const double MinimumWidth = 660;
+    public const double MinimumHeight = 560;
 
     /// <summary>Delay for the request that outlives macOS's own frame restoration.</summary>
     static readonly TimeSpan SettleDelay = TimeSpan.FromMilliseconds(450);

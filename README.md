@@ -15,7 +15,11 @@ Built with **.NET 10** and **.NET MAUI**, and it runs as a native **Mac Catalyst
 - Exports spreadsheet translations to either Excel or CSV while preserving the original column order and multiline CSV values.
 - Support for multiple languages (easy to extend).
 - Translates either one source file or every source `.resx` found recursively in a chosen folder.
-- Translations are bounded by both item count (up to 50 strings) and payload size, returned as validated structured output, and shown with animated file/language/batch progress, elapsed time, and token usage.
+- Translations are bounded by both item count (up to 40 strings) and payload size, streamed as strict structured output, and applied only after the complete batch validates.
+- If a provider returns malformed structured output or ends its stream with a provider-specific error, that batch is retried through up to four different providers (five total attempts). Provider exclusions apply only to that batch; there is no global provider denylist.
+- Live progress distinguishes request sending, provider connection, response streaming, validation, and file writing. Every request has a short ID shared with a redacted local diagnostics log, and an active translation can be cancelled.
+- Translation batches use one global fair queue: definitively free models run up to 2 requests in parallel, definitively paid models run up to 4, and missing or variable pricing conservatively uses 2. Folder jobs interleave batches across RESX files while a single large file can use every available slot.
+- Model reasoning is disabled when supported and always excluded from response content. If a model requires reasoning, the model catalog and final usage disclose it.
 - Output files are written next to the source `.resx` file, with no machine-specific paths.
 
 ## Running on macOS
@@ -55,7 +59,7 @@ To build the other targets, swap the framework: `net10.0-ios`, `net10.0-android`
 2. Choose **Model…**, search the live structured-output model catalog, review its input/output token prices, and select a model.
 3. Choose or drag in a `.resx`, `.xlsx`, or `.csv` file, or choose a folder to recursively translate every source `.resx` inside it. Generated localized RESX files are ignored when that folder is scanned again. Spreadsheet files must follow the translation audit layout with a `Default` column and adjacent language/status pairs such as `fr` and `fr Status`.
 4. Choose one target language. Search by language, country or region, native name, or culture code. The selected display name and BCP-47 code are both sent to the model; the code is used for the RESX filename or spreadsheet column.
-5. Click **Translate**. The LLM translates each complete resource string with sports fan-engagement and ticketing context while preserving placeholders and markup. The animated status identifies the current file, language, batch, completed entry count, model wait, and elapsed time. RESX results are written as `<SourceName>.<culture>.resx` (for example `AppResources.pt-PT.resx`) beside each originating file. CSV/Excel input produces a non-overwriting `.translated` copy.
+5. Click **Translate**. The LLM translates each complete resource string with sports fan-engagement and ticketing context while preserving placeholders and markup. The animated status shows overall entry/batch progress and every active request's file, batch, retry attempt, network stage, streamed response size, request ID, and elapsed time. A provider-specific failure retries the same batch through a different provider, up to five total attempts. **Cancel Translation** stops the whole queue, while **Open Diagnostics Log** opens the local lifecycle log. No translated output is written until every scheduled network batch validates. RESX results are then written as `<SourceName>.<culture>.resx` (for example `AppResources.pt-PT.resx`) beside each originating file. CSV/Excel input produces a non-overwriting `.translated` copy.
 6. **Export to Excel** or **Export to CSV** writes the currently loaded data to the selected format in the same output folder.
 
 ## Dependencies
