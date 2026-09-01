@@ -15,9 +15,10 @@
     #2C2C2E rows in 10pt cards, hairline inset separators, SF Pro at system text
     sizes, SF Symbols, and one violet tint from #512BD4 used only on the primary
     action, the selected checkmark, the focus ring and the progress bar.
-    STORY: The user sees a file, an OpenRouter account, a model and a language;
-    understands what will be written and where; presses Translate once; watches
-    determinate progress; ends with a result they can reveal in Finder.
+    STORY: The user sees a file or recursive RESX folder, an OpenRouter account,
+    a model and a language; understands what will be written and where; presses
+    Translate once; watches animated batch-by-batch progress; ends with a result
+    they can reveal in Finder.
     FIRST VIEWPORT: A 552pt centred column in a compact 620pt window. No nav bar;
     the name lives in the title bar. SOURCE card, then OPENROUTER card, then the
     filled Translate button with both exports as plain tinted text. Credentials
@@ -28,7 +29,7 @@
     provenance.
     -->
 
-    <ScrollView>
+    <ScrollView x:Name="MainScrollView">
         <VerticalStackLayout Padding="0,26,0,32"
                              Spacing="22"
                              WidthRequest="552"
@@ -73,14 +74,23 @@
                             <!-- An explicit button, not a tappable row: this is the
                                  macOS convention for choosing a file, and unlike a
                                  bare gesture on a layout it is a real control. -->
-                            <controls:ActionButton x:Name="PickFileButton"
-                                                   Grid.Column="2"
-                                                   Text="Choose File…"
-                                                   Prominence="Plain"
-                                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
-                                                   FontSize="13"
-                                                   VerticalOptions="Center"
-                                                   Clicked="OnFilePickerButtonClicked" />
+                            <HorizontalStackLayout Grid.Column="2"
+                                                   Spacing="2"
+                                                   VerticalOptions="Center">
+                                <controls:ActionButton x:Name="PickFileButton"
+                                                       Text="Choose File…"
+                                                       Prominence="Plain"
+                                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                       FontSize="13"
+                                                       Clicked="OnFilePickerButtonClicked" />
+                                <controls:ActionButton x:Name="PickFolderButton"
+                                                       Text="Choose Folder…"
+                                                       Prominence="Plain"
+                                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                       FontSize="13"
+                                                       Clicked="OnFolderPickerButtonClicked"
+                                                       SemanticProperties.Description="Choose a folder of RESX files" />
+                            </HorizontalStackLayout>
                         </Grid>
 
                         <BoxView x:Name="SourceSeparator"
@@ -242,12 +252,22 @@
                             BackgroundColor="{AppThemeBinding Light={StaticResource ControlFillLight}, Dark={StaticResource ControlFillDark}}"
                             StrokeShape="RoundRectangle 2"
                             HorizontalOptions="Fill">
-                        <Grid x:Name="ProgressTrack" ColumnDefinitions="0*,1*">
-                            <BoxView Grid.Column="0"
-                                     Color="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
+                        <Grid x:Name="ProgressAnimationTrack" IsClippedToBounds="True">
+                            <Grid x:Name="ProgressTrack" ColumnDefinitions="0*,1*">
+                                <BoxView Grid.Column="0"
+                                         Color="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
+                            </Grid>
+                            <BoxView x:Name="ProgressPulse"
+                                     WidthRequest="76"
+                                     HorizontalOptions="Start"
+                                     Opacity="0.5"
+                                     Color="{AppThemeBinding Light={StaticResource AccentFillLight}, Dark={StaticResource AccentFillDark}}" />
                         </Grid>
                     </Border>
-                    <Label x:Name="ProgressLabel" Style="{StaticResource RowValue}" />
+                    <Label x:Name="ProgressLabel"
+                           Style="{StaticResource RowValue}"
+                           LineBreakMode="WordWrap"
+                           MaxLines="2" />
                 </VerticalStackLayout>
 
                 <Grid x:Name="ResultGroup"

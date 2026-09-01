@@ -49,7 +49,23 @@ partial class OpenRouterModelPage : ModalSheetPage
         await RefreshModelsAsync();
     }
 
-    void OnSearchTextChanged(object? sender, TextChangedEventArgs e) => RenderRows();
+    void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        ClearSearchButton.IsVisible = !string.IsNullOrEmpty(e.NewTextValue);
+        RenderRows();
+    }
+
+    void OnSearchFocused(object? sender, FocusEventArgs e) =>
+        VisualStateManager.GoToState(ModelSearchWell, "Focused");
+
+    void OnSearchUnfocused(object? sender, FocusEventArgs e) =>
+        VisualStateManager.GoToState(ModelSearchWell, "Normal");
+
+    void OnClearSearchClicked(object? sender, EventArgs e)
+    {
+        ModelSearchEntry.Text = string.Empty;
+        ModelSearchEntry.Focus();
+    }
 
     async void OnRefreshClicked(object? sender, EventArgs e) => await RefreshModelsAsync();
 
@@ -110,7 +126,7 @@ partial class OpenRouterModelPage : ModalSheetPage
 
     void RenderRows()
     {
-        var query = ModelSearchBar?.Text?.Trim();
+        var query = ModelSearchEntry?.Text?.Trim();
         var filtered = string.IsNullOrWhiteSpace(query)
             ? _models
             : _models.Where(model =>

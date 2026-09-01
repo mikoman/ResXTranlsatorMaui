@@ -85,8 +85,32 @@ partial class OpenRouterConnectionPage : ModalSheetPage
             return;
         }
 
-        await OpenRouterCredentialStore.RemoveAsync();
-        await CloseAsync(new OpenRouterConnectionResult(OpenRouterConnectionOutcome.Removed));
+        var confirmed = await DisplayAlertAsync(
+            "Remove API key?",
+            "ResXTranslator will remove the saved OpenRouter key from this device. Your selected model will be kept.",
+            "Remove Key",
+            "Cancel");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _isBusy = true;
+
+        try
+        {
+            await OpenRouterCredentialStore.RemoveAsync();
+            await CloseAsync(new OpenRouterConnectionResult(OpenRouterConnectionOutcome.Removed));
+        }
+        catch (Exception ex)
+        {
+            ShowError($"The API key could not be removed: {ex.Message}");
+        }
+        finally
+        {
+            _isBusy = false;
+        }
     }
 
     void OnRevealClicked(object? sender, EventArgs e)

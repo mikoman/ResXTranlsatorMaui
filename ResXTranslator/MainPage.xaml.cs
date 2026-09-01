@@ -5,12 +5,15 @@ namespace ResXTranslator;
 public partial class MainPage : ContentPage
 {
     const int BatchSize = 50;
+    const int MaxBatchCharacters = 16_000;
 
     /// <summary>Sentinel row meaning "every configured language".</summary>
     static readonly MenuOption AllLanguagesOption = new("All languages");
 
     readonly OpenRouterClient _openRouterClient = new();
     string? _selectedFilePath;
+    PickedFolder? _pickedFolder;
+    IReadOnlyList<string> _folderResxFiles = [];
     TranslationSpreadsheetDocument? _translationDocument;
     string? _apiKey;
     IReadOnlyList<OpenRouterModel> _models = [];
@@ -21,6 +24,9 @@ public partial class MainPage : ContentPage
     bool _selectedModelUnavailable;
     bool _initialized;
     bool _isBusy;
+    IDispatcherTimer? _progressTimer;
+    string _progressMessage = "Preparing source…";
+    DateTimeOffset _progressMessageStarted;
 
     public MainPage()
     {
@@ -351,6 +357,58 @@ public partial class MainPage : ContentPage
         }
     }
 
+    async void OnFolderPickerButtonClicked(object? sender, EventArgs e)
+    {
+        if (_isBusy)
+        {
+            return;
+        }
+
+        PickedFolder? pickedFolder = null;
+
+        try
+        {
+            pickedFolder = await FolderPickerService.PickAsync();
+
+            if (pickedFolder is null)
+            {
+                return;
+            }
+
+            var files = await Task.Run(() => Directory
+                .EnumerateFiles(pickedFolder.Path, "*.resx", SearchOption.AllDirectories)
+                .Where(path => !IsLocalizedResXOutput(path))
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToArray());
+
+            _translationDocument?.Dispose();
+            _translationDocument = null;
+            _selectedFilePath = null;
+            _pickedFolder?.Dispose();
+            _pickedFolder = pickedFolder;
+            pickedFolder = null;
+            _folderResxFiles = files;
+
+            RenderSourceRow();
+            RenderLanguageOptions();
+            UpdateActionState();
+            ClearStatus();
+
+            if (files.Length == 0)
+            {
+                ShowError("This folder does not contain any source RESX files.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Could not open the selected folder: {ex.Message}");
+        }
+        finally
+        {
+            pickedFolder?.Dispose();
+        }
+    }
+
     /// <summary>
     /// Single entry point for both the file picker and a Finder drop, so the two
     /// paths cannot drift apart.
@@ -374,6 +432,9 @@ public partial class MainPage : ContentPage
 
         _translationDocument?.Dispose();
         _translationDocument = nextDocument;
+        _pickedFolder?.Dispose();
+        _pickedFolder = null;
+        _folderResxFiles = [];
         _selectedFilePath = fullPath;
 
         RenderSourceRow();
@@ -384,6 +445,22 @@ public partial class MainPage : ContentPage
 
     void RenderSourceRow()
     {
+        if (_pickedFolder is not null)
+        {
+            SourceIcon.Symbol = "folder.fill";
+            SourceTitleLabel.Text = Path.GetFileName(
+                _pickedFolder.Path.TrimEnd(Path.DirectorySeparatorChar));
+            SourceSubtitleLabel.IsVisible = false;
+            SourceSeparator.IsVisible = true;
+            SourceDetailLabel.Text = _folderResxFiles.Count == 0
+                ? "No source RESX files found"
+                : $"{_folderResxFiles.Count:N0} RESX {(_folderResxFiles.Count == 1 ? "file" : "files")}  ·  scans subfolders  ·  saves beside each source";
+            SourceDetailLabel.IsVisible = true;
+            PickFileButton.Text = "Choose File…";
+            PickFolderButton.Text = "Change Folder…";
+            return;
+        }
+
         if (_selectedFilePath is null)
         {
             SourceIcon.Symbol = "doc.badge.plus";
@@ -393,6 +470,7 @@ public partial class MainPage : ContentPage
             SourceSeparator.IsVisible = false;
             SourceDetailLabel.IsVisible = false;
             PickFileButton.Text = "Choose File…";
+            PickFolderButton.Text = "Choose Folder…";
             return;
         }
 
@@ -426,7 +504,8 @@ public partial class MainPage : ContentPage
         SourceDetailLabel.Text = string.Join("  ·  ", facts);
         SourceSeparator.IsVisible = true;
         SourceDetailLabel.IsVisible = true;
-        PickFileButton.Text = "Change…";
+        PickFileButton.Text = "Change File…";
+        PickFolderButton.Text = "Choose Folder…";
     }
 
     int? TryCountResXEntries(string path)
@@ -586,7 +665,6 @@ public partial class MainPage : ContentPage
 
         try
         {
-            var path = _selectedFilePath ?? throw new InvalidOperationException("Please select a file first.");
             var apiKey = _apiKey ?? throw new InvalidOperationException("Connect an OpenRouter account first.");
             var model = _selectedModel ?? throw new InvalidOperationException("Choose an OpenRouter model first.");
 
@@ -597,18 +675,32 @@ public partial class MainPage : ContentPage
 
             _translationUsage = default;
 
-            if (IsResX(path))
+            if (_pickedFolder is not null)
+            {
+                await TranslateResXFolderAsync(apiKey, model);
+            }
+            else if (_selectedFilePath is { } path && IsResX(path))
             {
                 await TranslateResXAsync(apiKey, model, path);
             }
+            else if (_selectedFilePath is { } spreadsheetPath)
+            {
+                await TranslateSpreadsheetAsync(apiKey, model, spreadsheetPath);
+            }
             else
             {
-                await TranslateSpreadsheetAsync(apiKey, model, path);
+                throw new InvalidOperationException("Please select a file or folder first.");
             }
         }
         catch (OpenRouterApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             _connectionState = OpenRouterConnectionState.NeedsAttention;
+            RenderOpenRouterState();
+            ShowError(ex.Message);
+        }
+        catch (OpenRouterApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _selectedModelUnavailable = true;
             RenderOpenRouterState();
             ShowError(ex.Message);
         }
@@ -632,27 +724,107 @@ public partial class MainPage : ContentPage
         }
 
         var languagesToTranslate = GetSelectedLanguages();
-        var outputDirectory = GetOutputDirectory(path);
-        var baseName = Path.GetFileNameWithoutExtension(path);
+        var workItem = new ResXWorkItem(path, values);
+        var progress = new TranslationProgress(languagesToTranslate.Count * values.Count);
+        var writtenFiles = await TranslateResXWorkItemAsync(
+            apiKey,
+            model,
+            workItem,
+            languagesToTranslate,
+            progress,
+            1,
+            1,
+            GetOutputDirectory(path));
+
+        ShowUsage(BuildUsageSummary(model));
+        ShowSuccess(
+            writtenFiles.Count == 1
+                ? "Translated into 1 language"
+                : $"Translated into {writtenFiles.Count} languages",
+            null,
+            writtenFiles);
+    }
+
+    async Task TranslateResXFolderAsync(string apiKey, OpenRouterModel model)
+    {
+        if (_folderResxFiles.Count == 0)
+        {
+            throw new InvalidOperationException("The selected folder does not contain any source RESX files.");
+        }
+
+        SetProgressMessage("Reading RESX files");
+        var workItems = await Task.Run(() => _folderResxFiles
+            .Select(path => new ResXWorkItem(path, ReadResXFile(path)))
+            .ToArray());
+        var translatableItems = workItems.Where(item => item.Values.Count > 0).ToArray();
+
+        if (translatableItems.Length == 0)
+        {
+            throw new InvalidOperationException("The selected folder's RESX files do not contain any string entries.");
+        }
+
+        var languagesToTranslate = GetSelectedLanguages();
+        var totalEntries = translatableItems.Sum(item => item.Values.Count) * languagesToTranslate.Count;
+        var progress = new TranslationProgress(totalEntries);
         var writtenFiles = new List<string>();
-        var keys = values.Keys.ToArray();
-        var sourceTexts = values.Values.ToArray();
-        var totalSteps = (double)languagesToTranslate.Count * sourceTexts.Length;
-        var completedSteps = 0d;
 
-        SetProgress(0);
+        for (var fileIndex = 0; fileIndex < translatableItems.Length; fileIndex++)
+        {
+            var item = translatableItems[fileIndex];
+            var outputDirectory = Path.GetDirectoryName(item.Path)
+                ?? throw new InvalidOperationException($"Could not locate the folder for {Path.GetFileName(item.Path)}.");
+            var outputs = await TranslateResXWorkItemAsync(
+                apiKey,
+                model,
+                item,
+                languagesToTranslate,
+                progress,
+                fileIndex + 1,
+                translatableItems.Length,
+                outputDirectory);
+            writtenFiles.AddRange(outputs);
+        }
 
-        foreach (var targetLanguage in languagesToTranslate)
+        var skipped = workItems.Length - translatableItems.Length;
+        ShowUsage(BuildUsageSummary(model));
+        ShowSuccess(
+            $"Translated {translatableItems.Length:N0} RESX {(translatableItems.Length == 1 ? "file" : "files")}",
+            skipped == 0
+                ? $"Created {writtenFiles.Count:N0} localized {(writtenFiles.Count == 1 ? "file" : "files")} beside the sources."
+                : $"Created {writtenFiles.Count:N0} localized files; skipped {skipped:N0} empty RESX files.",
+            writtenFiles);
+    }
+
+    async Task<IReadOnlyList<string>> TranslateResXWorkItemAsync(
+        string apiKey,
+        OpenRouterModel model,
+        ResXWorkItem item,
+        IReadOnlyList<TargetLanguageOption> languages,
+        TranslationProgress progress,
+        int fileIndex,
+        int fileCount,
+        string outputDirectory)
+    {
+        var keys = item.Values.Keys.ToArray();
+        var inputs = item.Values.Values
+            .Select((text, id) => new OpenRouterTranslationInput(id, text))
+            .ToArray();
+        var batches = CreateTranslationBatches(inputs, input => input.Text);
+        var writtenFiles = new List<string>(languages.Count);
+        var fileName = Path.GetFileName(item.Path);
+
+        foreach (var targetLanguage in languages)
         {
             var translatedValues = new Dictionary<string, string>(keys.Length);
 
-            for (var offset = 0; offset < sourceTexts.Length; offset += BatchSize)
+            for (var batchIndex = 0; batchIndex < batches.Count; batchIndex++)
             {
-                var batch = sourceTexts
-                    .Skip(offset)
-                    .Take(BatchSize)
-                    .Select((text, index) => new OpenRouterTranslationInput(offset + index, text))
-                    .ToArray();
+                var batch = batches[batchIndex];
+                SetProgress(progress.Total <= 0 ? 0 : progress.Completed / progress.Total);
+                SetProgressMessage(
+                    $"{fileName} ({fileIndex:N0}/{fileCount:N0}) · {targetLanguage.DisplayName} · batch {batchIndex + 1:N0}/{batches.Count:N0} · waiting for {model.Name}");
+                await Task.Yield();
+
                 var result = await _openRouterClient.TranslateAsync(
                     apiKey,
                     model.Id,
@@ -665,28 +837,21 @@ public partial class MainPage : ContentPage
                 }
 
                 _translationUsage += result.Usage;
-                completedSteps += batch.Length;
+                progress.Completed += batch.Length;
                 UpdateProgress(
-                    completedSteps,
-                    totalSteps,
-                    $"Translating into {targetLanguage.DisplayName}");
+                    progress.Completed,
+                    progress.Total,
+                    $"{fileName} · {targetLanguage.DisplayName} · received batch {batchIndex + 1:N0}/{batches.Count:N0}");
             }
 
             var outputPath = Path.Combine(
                 outputDirectory,
-                $"{baseName}.{targetLanguage.ColumnHeader}.resx");
-
+                $"{Path.GetFileNameWithoutExtension(item.Path)}.{targetLanguage.ColumnHeader}.resx");
             WriteResXFile(outputPath, translatedValues);
             writtenFiles.Add(outputPath);
         }
 
-        ShowUsage(BuildUsageSummary(model));
-        ShowSuccess(
-            writtenFiles.Count == 1
-                ? "Translated into 1 language"
-                : $"Translated into {writtenFiles.Count} languages",
-            null,
-            writtenFiles);
+        return writtenFiles;
     }
 
     async Task TranslateSpreadsheetAsync(string apiKey, OpenRouterModel model, string path)
@@ -724,13 +889,19 @@ public partial class MainPage : ContentPage
         foreach (var targetLanguage in languagesToTranslate)
         {
             var translatedValues = new Dictionary<int, string>(sourceRows.Count);
+            var inputs = sourceRows
+                .Select(row => new OpenRouterTranslationInput(row.RowNumber, row.Text))
+                .ToArray();
+            var batches = CreateTranslationBatches(inputs, input => input.Text);
 
-            for (var offset = 0; offset < sourceRows.Count; offset += BatchSize)
+            for (var batchIndex = 0; batchIndex < batches.Count; batchIndex++)
             {
-                var batchRows = sourceRows.Skip(offset).Take(BatchSize).ToArray();
-                var batch = batchRows
-                    .Select(row => new OpenRouterTranslationInput(row.RowNumber, row.Text))
-                    .ToArray();
+                var batch = batches[batchIndex];
+                SetProgress(totalSteps <= 0 ? 0 : completedSteps / totalSteps);
+                SetProgressMessage(
+                    $"{Path.GetFileName(path)} · {targetLanguage.DisplayName} · batch {batchIndex + 1:N0}/{batches.Count:N0} · waiting for {model.Name}");
+                await Task.Yield();
+
                 var result = await _openRouterClient.TranslateAsync(
                     apiKey,
                     model.Id,
@@ -743,11 +914,11 @@ public partial class MainPage : ContentPage
                 }
 
                 _translationUsage += result.Usage;
-                completedSteps += batchRows.Length;
+                completedSteps += batch.Length;
                 UpdateProgress(
                     completedSteps,
                     totalSteps,
-                    $"Translating into {targetLanguage.DisplayName}");
+                    $"{Path.GetFileName(path)} · {targetLanguage.DisplayName} · received batch {batchIndex + 1:N0}/{batches.Count:N0}");
             }
 
             document.AddLanguage(targetLanguage.ColumnHeader, translatedValues);
@@ -852,6 +1023,7 @@ public partial class MainPage : ContentPage
     {
         _isBusy = busy;
         PickFileButton.IsEnabled = !busy;
+        PickFolderButton.IsEnabled = !busy;
         ManageAccountButton.IsEnabled = !busy;
         ChooseModelButton.IsEnabled = !busy && !string.IsNullOrWhiteSpace(_apiKey);
         LanguageMenuButton.IsEnabled = !busy;
@@ -862,7 +1034,16 @@ public partial class MainPage : ContentPage
             ResultGroup.IsVisible = false;
             StatusBlock.IsVisible = true;
             SetProgress(0);
-            ProgressLabel.Text = "Starting…";
+            SetProgressMessage("Preparing source");
+            StartProgressFeedback();
+            Dispatcher.Dispatch(async () => await MainScrollView.ScrollToAsync(
+                ProgressGroup,
+                ScrollToPosition.MakeVisible,
+                true));
+        }
+        else
+        {
+            StopProgressFeedback();
         }
 
         UpdateActionState();
@@ -874,16 +1055,17 @@ public partial class MainPage : ContentPage
     /// </summary>
     void UpdateActionState()
     {
-        var hasFile = _selectedFilePath is not null;
+        var hasSource = _selectedFilePath is not null || _folderResxFiles.Count > 0;
         var hasUsableKey = !string.IsNullOrWhiteSpace(_apiKey) &&
             _connectionState is OpenRouterConnectionState.Connected or OpenRouterConnectionState.Unverified;
         var hasModel = _selectedModel is not null && !_selectedModelUnavailable;
+        var hasSingleFile = _selectedFilePath is not null;
 
         ManageAccountButton.IsEnabled = !_isBusy;
         ChooseModelButton.IsEnabled = !_isBusy && hasUsableKey;
-        TranslateButton.IsEnabled = !_isBusy && hasFile && hasUsableKey && hasModel;
-        ExportButton.IsEnabled = !_isBusy && hasFile;
-        ExportCsvButton.IsEnabled = !_isBusy && hasFile;
+        TranslateButton.IsEnabled = !_isBusy && hasSource && hasUsableKey && hasModel;
+        ExportButton.IsEnabled = !_isBusy && hasSingleFile;
+        ExportCsvButton.IsEnabled = !_isBusy && hasSingleFile;
     }
 
     void SetProgress(double fraction)
@@ -896,7 +1078,69 @@ public partial class MainPage : ContentPage
     void UpdateProgress(double completedSteps, double totalSteps, string message)
     {
         SetProgress(totalSteps <= 0 ? 0 : completedSteps / totalSteps);
-        ProgressLabel.Text = $"{message}  ·  {completedSteps:N0} of {totalSteps:N0} entries";
+        SetProgressMessage($"{message}  ·  {completedSteps:N0} of {totalSteps:N0} entries");
+    }
+
+    void SetProgressMessage(string message)
+    {
+        _progressMessage = message;
+        _progressMessageStarted = DateTimeOffset.UtcNow;
+        RenderProgressMessage();
+    }
+
+    void RenderProgressMessage()
+    {
+        var elapsed = DateTimeOffset.UtcNow - _progressMessageStarted;
+        ProgressLabel.Text = elapsed < TimeSpan.FromSeconds(1)
+            ? _progressMessage
+            : $"{_progressMessage}  ·  {elapsed:mm\\:ss} elapsed";
+    }
+
+    void StartProgressFeedback()
+    {
+        _progressTimer ??= Dispatcher.CreateTimer();
+        _progressTimer.Interval = TimeSpan.FromSeconds(1);
+        _progressTimer.Tick -= OnProgressTimerTick;
+        _progressTimer.Tick += OnProgressTimerTick;
+        _progressTimer.Start();
+
+        ProgressPulse.TranslationX = -76;
+
+        if (IsReduceMotionEnabled())
+        {
+            ProgressPulse.TranslationX = 0;
+            ProgressPulse.Opacity = 0.25;
+            return;
+        }
+
+        ProgressPulse.Opacity = 0.5;
+        new Animation(
+                value => ProgressPulse.TranslationX = -76 +
+                    ((Math.Max(ProgressAnimationTrack.Width, 552) + 76) * value),
+                0,
+                1)
+            .Commit(
+                ProgressPulse,
+                "ProgressPulse",
+                16,
+                1_150,
+                Easing.SinInOut,
+                repeat: () => _isBusy);
+    }
+
+    void StopProgressFeedback()
+    {
+        _progressTimer?.Stop();
+        ProgressPulse.AbortAnimation("ProgressPulse");
+        ProgressPulse.TranslationX = -76;
+    }
+
+    void OnProgressTimerTick(object? sender, EventArgs e)
+    {
+        if (_isBusy)
+        {
+            RenderProgressMessage();
+        }
     }
 
     void ClearStatus()
@@ -917,7 +1161,7 @@ public partial class MainPage : ContentPage
         ShowResult("checkmark.circle.fill", "SuccessLight", "SuccessDark", title, detail, files);
 
     void ShowError(string message) =>
-        ShowResult("exclamationmark.triangle.fill", "DangerLight", "DangerDark", "Something went wrong", message, []);
+        ShowResult("exclamationmark.triangle.fill", "DangerLight", "DangerDark", "Couldn't complete that", message, []);
 
     void ShowResult(
         string symbol,
@@ -948,26 +1192,33 @@ public partial class MainPage : ContentPage
         {
             ResultFileList.Add(BuildFileLink(file));
         }
+
+        Dispatcher.Dispatch(async () => await MainScrollView.ScrollToAsync(
+            ResultGroup,
+            ScrollToPosition.MakeVisible,
+            true));
     }
 
     /// <summary>A written file, tappable to reveal in Finder.</summary>
-    Label BuildFileLink(string path)
+    View BuildFileLink(string path)
     {
-        var label = new Label
+        var button = new ActionButton
         {
             Text = Abbreviate(path),
             FontSize = 11,
             LineBreakMode = LineBreakMode.MiddleTruncation,
-            TextDecorations = TextDecorations.Underline
+            Prominence = ButtonProminence.Plain,
+            HorizontalOptions = LayoutOptions.Start
         };
 
-        label.SetAppTheme(Label.TextColorProperty, Resource<Color>("AccentTextLight"), Resource<Color>("AccentTextDark"));
+        button.SetAppTheme(
+            ActionButton.AccentProperty,
+            Resource<Color>("AccentTextLight"),
+            Resource<Color>("AccentTextDark"));
+        SemanticProperties.SetDescription(button, $"Reveal {Path.GetFileName(path)} in the file manager");
+        button.Clicked += (_, _) => RevealInFileManager(path);
 
-        var tap = new TapGestureRecognizer();
-        tap.Tapped += (_, _) => RevealInFileManager(path);
-        label.GestureRecognizers.Add(tap);
-
-        return label;
+        return button;
     }
 
     static void RevealInFileManager(string path)
@@ -997,6 +1248,55 @@ public partial class MainPage : ContentPage
 
     static bool IsResX(string path) =>
         string.Equals(Path.GetExtension(path), ".resx", StringComparison.OrdinalIgnoreCase);
+
+    static bool IsReduceMotionEnabled()
+    {
+#if IOS || MACCATALYST
+        return UIKit.UIAccessibility.IsReduceMotionEnabled;
+#else
+        return false;
+#endif
+    }
+
+    static bool IsLocalizedResXOutput(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        return LanguageCatalog.All.Any(language => fileName.EndsWith(
+            $".{language.ColumnHeader}.resx",
+            StringComparison.OrdinalIgnoreCase));
+    }
+
+    static IReadOnlyList<T[]> CreateTranslationBatches<T>(
+        IReadOnlyList<T> items,
+        Func<T, string> getText)
+    {
+        var batches = new List<T[]>();
+        var current = new List<T>(BatchSize);
+        var currentCharacters = 0;
+
+        foreach (var item in items)
+        {
+            var characterCount = getText(item).Length;
+
+            if (current.Count > 0 &&
+                (current.Count >= BatchSize || currentCharacters + characterCount > MaxBatchCharacters))
+            {
+                batches.Add(current.ToArray());
+                current.Clear();
+                currentCharacters = 0;
+            }
+
+            current.Add(item);
+            currentCharacters += characterCount;
+        }
+
+        if (current.Count > 0)
+        {
+            batches.Add(current.ToArray());
+        }
+
+        return batches;
+    }
 
     static void SaveDocument(TranslationSpreadsheetDocument document, string path, string extension)
     {
@@ -1061,5 +1361,14 @@ public partial class MainPage : ContentPage
         {
             return false;
         }
+    }
+
+    sealed record ResXWorkItem(string Path, Dictionary<string, string> Values);
+
+    sealed class TranslationProgress(double total)
+    {
+        public double Completed { get; set; }
+
+        public double Total { get; } = total;
     }
 }

@@ -29,11 +29,35 @@
                                    Clicked="OnRefreshClicked" />
         </Grid>
 
-        <SearchBar x:Name="ModelSearchBar"
-                   Grid.Row="1"
-                   Placeholder="Search names, providers or model IDs"
-                   TextChanged="OnSearchTextChanged"
-                   SemanticProperties.Description="Search OpenRouter models" />
+        <Border x:Name="ModelSearchWell"
+                Grid.Row="1"
+                Style="{StaticResource FieldWell}"
+                MinimumHeightRequest="40">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                <controls:SymbolImage Symbol="magnifyingglass"
+                                      PointSize="13"
+                                      Tint="{AppThemeBinding Light={StaticResource SecondaryLabelLight}, Dark={StaticResource SecondaryLabelDark}}"
+                                      VerticalOptions="Center" />
+                <Entry x:Name="ModelSearchEntry"
+                       Grid.Column="1"
+                       Placeholder="Search names, providers or model IDs"
+                       FontSize="13"
+                       ReturnType="Search"
+                       Focused="OnSearchFocused"
+                       Unfocused="OnSearchUnfocused"
+                       TextChanged="OnSearchTextChanged"
+                       SemanticProperties.Description="Search OpenRouter models" />
+                <controls:ActionButton x:Name="ClearSearchButton"
+                                       Grid.Column="2"
+                                       Text="Clear"
+                                       Prominence="Plain"
+                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                       FontSize="12"
+                                       IsVisible="False"
+                                       Clicked="OnClearSearchClicked"
+                                       SemanticProperties.Description="Clear model search" />
+            </Grid>
+        </Border>
 
         <Grid x:Name="CatalogNotice"
               Grid.Row="2"

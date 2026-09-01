@@ -8,12 +8,13 @@ Built with **.NET 10** and **.NET MAUI**, and it runs as a native **Mac Catalyst
 
 - Uses an LLM through the [OpenRouter API](https://openrouter.ai/) with a fixed sports fan-engagement and ticketing localization context.
 - Loads OpenRouter's compatible model catalog, supports model search and pricing comparison, and stores the chosen model for the next run.
-- Stores the OpenRouter API key in the platform's secure credential storage rather than application preferences.
+- Stores the OpenRouter API key in the platform's secure credential storage rather than application preferences (the login Keychain on macOS).
 - Exports translations to Excel using the MIT-licensed [ClosedXML library](https://github.com/ClosedXML/ClosedXML).
 - Imports translation audit documents from CSV or Excel (`.xlsx`) and adds new language/value and status columns without overwriting the source.
 - Exports spreadsheet translations to either Excel or CSV while preserving the original column order and multiline CSV values.
 - Support for multiple languages (easy to extend).
-- Translations are batched (up to 50 strings per API request), returned as validated structured output, and shown with live progress and token usage.
+- Translates either one source file or every source `.resx` found recursively in a chosen folder.
+- Translations are bounded by both item count (up to 50 strings) and payload size, returned as validated structured output, and shown with animated file/language/batch progress, elapsed time, and token usage.
 - Output files are written next to the source `.resx` file, with no machine-specific paths.
 
 ## Running on macOS
@@ -51,9 +52,9 @@ To build the other targets, swap the framework: `net10.0-ios`, `net10.0-android`
 
 1. Under **OpenRouter**, open **Manage…**, paste an [OpenRouter API key](https://openrouter.ai/keys), and connect. The validated key is saved in the platform's secure credential store and is never shown again after the sheet closes.
 2. Choose **Model…**, search the live structured-output model catalog, review its input/output token prices, and select a model.
-3. Choose or drag in a `.resx`, `.xlsx`, or `.csv` file. Spreadsheet files must follow the translation audit layout with a `Default` column and adjacent language/status pairs such as `fr` and `fr Status`.
+3. Choose or drag in a `.resx`, `.xlsx`, or `.csv` file, or choose a folder to recursively translate every source `.resx` inside it. Generated localized RESX files are ignored when that folder is scanned again. Spreadsheet files must follow the translation audit layout with a `Default` column and adjacent language/status pairs such as `fr` and `fr Status`.
 4. Optionally pick a single target language; leaving the menu on **All languages** translates every configured language for RESX, or every configured language missing from a spreadsheet.
-5. Click **Translate**. The LLM translates each complete resource string with sports fan-engagement and ticketing context while preserving placeholders and markup. RESX results are written as `<SourceName>.<culture>.resx` (for example `AppResources.pt-PT.resx`). CSV/Excel input produces a non-overwriting `.translated` copy.
+5. Click **Translate**. The LLM translates each complete resource string with sports fan-engagement and ticketing context while preserving placeholders and markup. The animated status identifies the current file, language, batch, completed entry count, model wait, and elapsed time. RESX results are written as `<SourceName>.<culture>.resx` (for example `AppResources.pt-PT.resx`) beside each originating file. CSV/Excel input produces a non-overwriting `.translated` copy.
 6. **Export to Excel** or **Export to CSV** writes the currently loaded data to the selected format in the same output folder.
 
 ## Dependencies

@@ -12,13 +12,21 @@ sealed class OpenRouterClient
         """;
 
     static readonly Uri BaseAddress = new("https://openrouter.ai/api/v1/");
-    static readonly HttpClient HttpClient = new() { BaseAddress = BaseAddress, Timeout = TimeSpan.FromMinutes(3) };
+    static readonly HttpClient HttpClient = new()
+    {
+        BaseAddress = BaseAddress,
+        Timeout = System.Threading.Timeout.InfiniteTimeSpan
+    };
     static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task ValidateApiKeyAsync(string apiKey, CancellationToken cancellationToken = default)
     {
         using var request = CreateRequest(HttpMethod.Get, "key", apiKey);
-        using var response = await HttpClient.SendAsync(request, cancellationToken);
+        using var response = await SendAsync(
+            request,
+            cancellationToken,
+            TimeSpan.FromSeconds(30),
+            "OpenRouter did not respond while checking the API key.");
         await EnsureSuccessAsync(response, cancellationToken);
     }
 
@@ -30,7 +38,11 @@ sealed class OpenRouterClient
             HttpMethod.Get,
             "models?output_modalities=text&supported_parameters=structured_outputs",
             apiKey);
-        using var response = await HttpClient.SendAsync(request, cancellationToken);
+        using var response = await SendAsync(
+            request,
+            cancellationToken,
+            TimeSpan.FromMinutes(1),
+            "OpenRouter did not return the model catalog within one minute.");
         var responseText = await ReadSuccessfulResponseAsync(response, cancellationToken);
 
         using var document = JsonDocument.Parse(responseText);
@@ -141,7 +153,11 @@ sealed class OpenRouterClient
         using var request = CreateRequest(HttpMethod.Post, "chat/completions", apiKey);
         request.Content = JsonContent.Create(payload, options: JsonOptions);
 
-        using var response = await HttpClient.SendAsync(request, cancellationToken);
+        using var response = await SendAsync(
+            request,
+            cancellationToken,
+            TimeSpan.FromMinutes(10),
+            "OpenRouter did not finish this batch within 10 minutes. Try a faster model or shorter source strings.");
         var responseText = await ReadSuccessfulResponseAsync(response, cancellationToken);
         return ParseTranslationResponse(responseText, inputs);
     }
@@ -239,6 +255,25 @@ sealed class OpenRouterClient
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         request.Headers.TryAddWithoutValidation("X-OpenRouter-Title", "ResXTranslator");
         return request;
+    }
+
+    static async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken,
+        TimeSpan timeout,
+        string timeoutMessage)
+    {
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(timeout);
+
+        try
+        {
+            return await HttpClient.SendAsync(request, timeoutSource.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException(timeoutMessage);
+        }
     }
 
     static async Task<string> ReadSuccessfulResponseAsync(
