@@ -17,7 +17,7 @@ Built with **.NET 10** and **.NET MAUI**, and it runs as a native **Mac Catalyst
 - Translates either one source file or every source `.resx` found recursively in a chosen folder.
 - Translations are bounded by both item count (up to 40 strings) and payload size, streamed as strict structured output, and applied only after the complete batch validates.
 - If a provider returns malformed structured output or ends its stream with a provider-specific error, that batch is retried through up to four different providers (five total attempts). Provider exclusions apply only to that batch; there is no global provider denylist.
-- Live progress distinguishes request sending, provider connection, response streaming, validation, and file writing. Every request has a short ID shared with a redacted local diagnostics log, and an active translation can be cancelled.
+- Live progress distinguishes request sending, provider connection, response streaming, validation, and file writing. A dedicated timer measures the complete operation and the final result retains that duration. Every request has a short ID shared with a redacted local diagnostics log, and an active translation can be cancelled.
 - Translation batches use one global fair queue: definitively free models run up to 2 requests in parallel, definitively paid models run up to 4, and missing or variable pricing conservatively uses 2. Folder jobs interleave batches across RESX files while a single large file can use every available slot.
 - Model reasoning is disabled when supported and always excluded from response content. If a model requires reasoning, the model catalog and final usage disclose it.
 - Output files are written next to the source `.resx` file, with no machine-specific paths.

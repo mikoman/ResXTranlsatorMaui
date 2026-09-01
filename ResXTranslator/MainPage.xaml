@@ -279,10 +279,21 @@
                                      Color="{AppThemeBinding Light={StaticResource AccentFillLight}, Dark={StaticResource AccentFillDark}}" />
                         </Grid>
                     </Border>
-                    <Label x:Name="ProgressLabel"
-                           Style="{StaticResource StatusTitle}"
-                           LineBreakMode="WordWrap"
-                           MaxLines="2" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <Label x:Name="ProgressLabel"
+                               Grid.Column="0"
+                               Style="{StaticResource StatusTitle}"
+                               LineBreakMode="WordWrap"
+                               MaxLines="2" />
+                        <Label x:Name="ElapsedTimeLabel"
+                               Grid.Column="1"
+                               Text="Elapsed 00:00"
+                               Style="{StaticResource RowFooter}"
+                               FontSize="12"
+                               HorizontalTextAlignment="End"
+                               VerticalTextAlignment="Center"
+                               SemanticProperties.Description="Total operation elapsed time" />
+                    </Grid>
                     <Label x:Name="ProgressDetailLabel"
                            Style="{StaticResource RowFooter}"
                            LineBreakMode="WordWrap"

@@ -1,4 +1,5 @@
 using ResXTranslator.Controls;
+using System.Diagnostics;
 
 namespace ResXTranslator;
 
@@ -27,9 +28,9 @@ public partial class MainPage : ContentPage
     TranslationProgress? _activeTranslationProgress;
     int _activeConcurrency;
     IDispatcherTimer? _progressTimer;
+    readonly Stopwatch _progressStopwatch = new();
     string _progressMessage = "Preparing source";
     string _progressDetail = "Inspecting the selected input";
-    DateTimeOffset _progressOperationStarted;
 
     public MainPage()
     {
@@ -701,37 +702,51 @@ public partial class MainPage : ContentPage
                 throw new InvalidOperationException("Please select a file or folder first.");
             }
 
-            AppDiagnostics.Write("Translation", $"Run {runId} completed");
+            AppDiagnostics.Write(
+                "Translation",
+                $"Run {runId} completed | elapsed={FormatRunDuration(_progressStopwatch.Elapsed)}");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            AppDiagnostics.Write("Translation", $"Run {runId} cancelled by user");
+            AppDiagnostics.Write(
+                "Translation",
+                $"Run {runId} cancelled by user | elapsed={FormatRunDuration(_progressStopwatch.Elapsed)}");
             ShowResult(
                 "stop.circle.fill",
                 "WarningLight",
                 "WarningDark",
                 "Translation cancelled",
-                "The current batch was discarded. Files completed earlier in a folder run remain saved.",
+                "The current batch was discarded. Files completed earlier in a folder run remain saved." +
+                Environment.NewLine + $"Stopped after {FormatRunDuration(_progressStopwatch.Elapsed)}.",
                 []);
         }
         catch (OpenRouterApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            AppDiagnostics.WriteException("Translation", $"Run {runId} failed", ex);
+            AppDiagnostics.WriteException(
+                "Translation",
+                $"Run {runId} failed after {FormatRunDuration(_progressStopwatch.Elapsed)}",
+                ex);
             _connectionState = OpenRouterConnectionState.NeedsAttention;
             RenderOpenRouterState();
-            ShowError(ex.Message);
+            ShowTranslationError(ex.Message);
         }
         catch (OpenRouterApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
-            AppDiagnostics.WriteException("Translation", $"Run {runId} failed", ex);
+            AppDiagnostics.WriteException(
+                "Translation",
+                $"Run {runId} failed after {FormatRunDuration(_progressStopwatch.Elapsed)}",
+                ex);
             _selectedModelUnavailable = true;
             RenderOpenRouterState();
-            ShowError(ex.Message);
+            ShowTranslationError(ex.Message);
         }
         catch (Exception ex)
         {
-            AppDiagnostics.WriteException("Translation", $"Run {runId} failed", ex);
-            ShowError(ex.Message);
+            AppDiagnostics.WriteException(
+                "Translation",
+                $"Run {runId} failed after {FormatRunDuration(_progressStopwatch.Elapsed)}",
+                ex);
+            ShowTranslationError(ex.Message);
         }
         finally
         {
@@ -807,7 +822,10 @@ public partial class MainPage : ContentPage
             cancellationToken);
 
         ShowUsage(BuildUsageSummary(model));
-        ShowSuccess("Translated into 1 language", null, writtenFiles);
+        ShowSuccess(
+            "Translated into 1 language",
+            $"Completed in {FormatRunDuration(_progressStopwatch.Elapsed)}.",
+            writtenFiles);
     }
 
     async Task TranslateResXFolderAsync(
@@ -846,8 +864,10 @@ public partial class MainPage : ContentPage
         ShowSuccess(
             $"Translated {translatableItems.Length:N0} RESX {(translatableItems.Length == 1 ? "file" : "files")}",
             skipped == 0
-                ? $"Created {writtenFiles.Count:N0} localized {(writtenFiles.Count == 1 ? "file" : "files")} beside the sources."
-                : $"Created {writtenFiles.Count:N0} localized files; skipped {skipped:N0} empty RESX files.",
+                ? $"Created {writtenFiles.Count:N0} localized {(writtenFiles.Count == 1 ? "file" : "files")} beside the sources." +
+                    Environment.NewLine + $"Completed in {FormatRunDuration(_progressStopwatch.Elapsed)}."
+                : $"Created {writtenFiles.Count:N0} localized files; skipped {skipped:N0} empty RESX files." +
+                    Environment.NewLine + $"Completed in {FormatRunDuration(_progressStopwatch.Elapsed)}.",
             writtenFiles);
     }
 
@@ -1001,7 +1021,7 @@ public partial class MainPage : ContentPage
         RenderLanguageState();
         ShowSuccess(
             $"Added {selectedLanguage.ColumnHeader}",
-            null,
+            $"Completed in {FormatRunDuration(_progressStopwatch.Elapsed)}.",
             [outputPath]);
     }
 
@@ -1253,7 +1273,7 @@ public partial class MainPage : ContentPage
             ResultGroup.IsVisible = false;
             StatusBlock.IsVisible = true;
             SetProgress(0);
-            _progressOperationStarted = DateTimeOffset.UtcNow;
+            _progressStopwatch.Restart();
             SetProgressState("Preparing source", "Inspecting the selected input");
             StartProgressFeedback();
             Dispatcher.Dispatch(async () => await MainScrollView.ScrollToAsync(
@@ -1263,6 +1283,7 @@ public partial class MainPage : ContentPage
         }
         else
         {
+            _progressStopwatch.Stop();
             StopProgressFeedback();
             _activeRequests.Clear();
             _activeTranslationProgress = null;
@@ -1311,11 +1332,12 @@ public partial class MainPage : ContentPage
 
     void RenderProgressMessage()
     {
-        var elapsed = DateTimeOffset.UtcNow - _progressOperationStarted;
         ProgressLabel.Text = _progressMessage;
-        ProgressDetailLabel.Text = elapsed < TimeSpan.FromSeconds(1)
-            ? _progressDetail
-            : $"{_progressDetail} · {FormatElapsed(elapsed)} total";
+        ElapsedTimeLabel.Text = $"Elapsed {FormatRunDuration(_progressStopwatch.Elapsed)}";
+        SemanticProperties.SetDescription(
+            ElapsedTimeLabel,
+            $"Total operation elapsed time {FormatRunDuration(_progressStopwatch.Elapsed)}");
+        ProgressDetailLabel.Text = _progressDetail;
         SemanticProperties.SetDescription(
             ProgressDetailLabel,
             $"{_progressMessage}. {ProgressDetailLabel.Text}");
@@ -1406,6 +1428,10 @@ public partial class MainPage : ContentPage
         ? elapsed.ToString("h\\:mm\\:ss")
         : elapsed.ToString("m\\:ss");
 
+    static string FormatRunDuration(TimeSpan elapsed) => elapsed.TotalHours >= 1
+        ? $"{(int)elapsed.TotalHours:N0}:{elapsed.Minutes:00}:{elapsed.Seconds:00}"
+        : $"{(int)elapsed.TotalMinutes:00}:{elapsed.Seconds:00}";
+
     void StartProgressFeedback()
     {
         _progressTimer ??= Dispatcher.CreateTimer();
@@ -1472,6 +1498,9 @@ public partial class MainPage : ContentPage
 
     void ShowError(string message) =>
         ShowResult("exclamationmark.triangle.fill", "DangerLight", "DangerDark", "Couldn't complete that", message, []);
+
+    void ShowTranslationError(string message) =>
+        ShowError(message + Environment.NewLine + $"Stopped after {FormatRunDuration(_progressStopwatch.Elapsed)}.");
 
     void ShowResult(
         string symbol,
