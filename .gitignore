@@ -419,3 +419,6 @@ Desktop.ini
 xcuserdata/
 *.xcuserstate
 DerivedData/
+
+# AI Generated folders
+.impeccable

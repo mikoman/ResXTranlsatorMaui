@@ -1,4 +1,7 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
+using Microsoft.Maui.Handlers;
+using Microsoft.Maui.Platform;
+using ResXTranslator.Controls;
 
 namespace ResXTranslator;
 
@@ -11,9 +14,14 @@ public static class MauiProgram
 			.UseMauiApp<App>()
 			.ConfigureFonts(fonts =>
 			{
+				// Registered as aliases only. Nothing in Styles.xaml names them, so
+				// every control falls through to the platform system face: SF Pro on
+				// Mac Catalyst and iOS, Segoe UI Variable on Windows.
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
 			});
+
+		CustomizeHandlers();
 
 #if DEBUG
 		builder.Logging.AddDebug();
@@ -21,5 +29,106 @@ public static class MauiProgram
 
 		return builder.Build();
 	}
-}
 
+	/// <summary>
+	/// Handler customizations. Mappers are global, so each one guards on the
+	/// concrete type it cares about. A custom mapper key re-runs on every handler
+	/// connect, so these survive handler recycling, and
+	/// <c>Handler.UpdateValue(key)</c> re-runs one on demand.
+	/// </summary>
+	static void CustomizeHandlers()
+	{
+		ButtonHandler.Mapper.AppendToMapping(MenuButton.MenuMapperKey, (handler, view) =>
+		{
+			if (view is not MenuButton menuButton)
+			{
+				return;
+			}
+
+#if IOS || MACCATALYST
+			if (handler.PlatformView is UIKit.UIButton native)
+			{
+				MenuButtonPlatform.Apply(menuButton, native);
+			}
+#elif WINDOWS
+			if (handler.PlatformView is Microsoft.UI.Xaml.Controls.Button native)
+			{
+				MenuButtonPlatform.Apply(menuButton, native);
+			}
+#endif
+		});
+
+		ButtonHandler.Mapper.AppendToMapping(ActionButton.ProminenceMapperKey, (handler, view) =>
+		{
+			if (view is not ActionButton button)
+			{
+				return;
+			}
+
+#if IOS || MACCATALYST
+			if (handler.PlatformView is not UIKit.UIButton native)
+			{
+				return;
+			}
+
+			var configuration = button.Prominence == ButtonProminence.Filled
+				? UIKit.UIButtonConfiguration.FilledButtonConfiguration
+				: UIKit.UIButtonConfiguration.PlainButtonConfiguration;
+
+			if (button.Accent is { } accent)
+			{
+				var platformAccent = accent.ToPlatform();
+
+				if (button.Prominence == ButtonProminence.Filled)
+				{
+					// Disabled goes neutral, the way macOS dims a default button. A
+					// faded tint keeps the fill but leaves the label unreadable
+					// against it, which is worse than losing the colour.
+					configuration.BaseBackgroundColor = button.IsEnabled
+						? platformAccent
+						: UIKit.UIColor.SecondarySystemFill;
+					configuration.BaseForegroundColor = button.IsEnabled
+						? UIKit.UIColor.White
+						: UIKit.UIColor.SecondaryLabel;
+				}
+				else
+				{
+					configuration.BaseForegroundColor = button.IsEnabled
+						? platformAccent
+						: UIKit.UIColor.SecondaryLabel;
+				}
+			}
+
+			native.Configuration = configuration;
+			native.SetNeedsUpdateConfiguration();
+#endif
+		});
+
+		ImageHandler.Mapper.AppendToMapping(SymbolImage.SymbolMapperKey, (handler, view) =>
+		{
+#if IOS || MACCATALYST
+			if (view is SymbolImage symbol && handler.PlatformView is UIKit.UIImageView imageView)
+			{
+				if (symbol.Tint is { } tint)
+				{
+					imageView.TintColor = tint.ToPlatform();
+				}
+
+				imageView.Image = symbol.Render();
+			}
+#endif
+		});
+
+#if IOS || MACCATALYST
+		// The Entry sits inside our own FieldWell border. Clearing the native
+		// RoundedRect bezel stops it reading as double-framed.
+		EntryHandler.Mapper.AppendToMapping("Entry.NoNativeBezel", (handler, _) =>
+		{
+			if (handler.PlatformView is UIKit.UITextField field)
+			{
+				field.BorderStyle = UIKit.UITextBorderStyle.None;
+			}
+		});
+#endif
+	}
+}

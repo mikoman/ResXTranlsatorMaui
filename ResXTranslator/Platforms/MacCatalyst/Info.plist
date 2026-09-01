@@ -2,10 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- 6 = the Mac user interface idiom: no iPad downscaling (the interface was
+	     rendering at 0.769), and UIKit controls take on AppKit metrics and
+	     behaviour. Requires macOS 11+, satisfied by SupportedOSPlatformVersion 15.0.
+	     Note this idiom forbids UIPickerView, UIStepper and UIRefreshControl, and
+	     throws if AddGestureRecognizer is called on a UIButton — see Styles.xaml. -->
 	<key>UIDeviceFamily</key>
 	<array>
-		<integer>1</integer>
-		<integer>2</integer>
+		<integer>6</integer>
 	</array>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>

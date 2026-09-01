@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ResourceDictionary 
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
@@ -41,4 +41,45 @@
     <SolidColorBrush x:Key="Gray600Brush" Color="{StaticResource Gray600}"/>
     <SolidColorBrush x:Key="Gray900Brush" Color="{StaticResource Gray900}"/>
     <SolidColorBrush x:Key="Gray950Brush" Color="{StaticResource Gray950}"/>
+    <!-- ==========================================================
+         Apple semantic tokens. Mirrors UIColor's systemGroupedBackground /
+         label / separator families so light and dark are both first class.
+         Eight-digit values are #AARRGGBB, which is XAML's order and the reverse
+         of Apple's own #RRGGBBAA documentation — getting it backwards turns the
+         neutral control fill into dark olive.
+         AccentFill and AccentText are deliberately separate: #512BD4 gives
+         7.9:1 under white text (correct as a filled button) but only ~2.2:1
+         against the dark ground, so it cannot double as tinted text there.
+         ========================================================== -->
+
+    <Color x:Key="GroupedBackgroundLight">#F2F2F7</Color>
+    <Color x:Key="GroupedBackgroundDark">#1C1C1E</Color>
+    <Color x:Key="RowSurfaceLight">#FFFFFF</Color>
+    <Color x:Key="RowSurfaceDark">#2C2C2E</Color>
+    <Color x:Key="SeparatorLight">#C6C6C8</Color>
+    <Color x:Key="SeparatorDark">#38383A</Color>
+
+    <Color x:Key="LabelLight">#000000</Color>
+    <Color x:Key="LabelDark">#FFFFFF</Color>
+    <Color x:Key="SecondaryLabelLight">#8A8A8E</Color>
+    <Color x:Key="SecondaryLabelDark">#98989D</Color>
+    <Color x:Key="TertiaryLabelLight">#C4C4C6</Color>
+    <Color x:Key="TertiaryLabelDark">#5B5B5E</Color>
+
+    <Color x:Key="ControlFillLight">#33787880</Color>
+    <Color x:Key="ControlFillDark">#5C787880</Color>
+
+    <Color x:Key="AccentFillLight">#512BD4</Color>
+    <Color x:Key="AccentFillDark">#6B45E8</Color>
+    <Color x:Key="AccentFillPressedLight">#4524BB</Color>
+    <Color x:Key="AccentFillPressedDark">#7D5AEF</Color>
+    <Color x:Key="AccentTextLight">#512BD4</Color>
+    <Color x:Key="AccentTextDark">#9F86FF</Color>
+
+    <Color x:Key="SuccessLight">#34C759</Color>
+    <Color x:Key="SuccessDark">#30D158</Color>
+    <Color x:Key="WarningLight">#FF9500</Color>
+    <Color x:Key="WarningDark">#FF9F0A</Color>
+    <Color x:Key="DangerLight">#FF3B30</Color>
+    <Color x:Key="DangerDark">#FF453A</Color>
 </ResourceDictionary>

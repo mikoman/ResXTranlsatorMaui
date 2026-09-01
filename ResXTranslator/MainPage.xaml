@@ -1,51 +1,238 @@
-﻿<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:local="clr-namespace:ResXTranslator"
+             xmlns:controls="clr-namespace:ResXTranslator.Controls"
              x:Class="ResXTranslator.MainPage"
-             Title="ResXTranslator">
+             Title="ResXTranslator"
+             Shell.NavBarIsVisible="False">
+
+    <!--
+    THESIS: A .resx translator that reads as a macOS utility, not a form. It
+    refuses the category default of a stacked column of identically-weighted
+    buttons; the interface states what it knows about your file, and offers one
+    action.
+    OWN-WORLD: Apple's grouped-list vocabulary. #F2F2F7 / #1C1C1E ground, white /
+    #2C2C2E rows in 10pt cards, hairline inset separators, SF Pro at system text
+    sizes, SF Symbols, and one violet tint from #512BD4 used only on the primary
+    action, the selected checkmark, the focus ring and the progress bar.
+    STORY: The user sees a file, a key and a language; understands what will be
+    written and where; presses Translate once; watches determinate progress; ends
+    with a result they can reveal in Finder.
+    FIRST VIEWPORT: A 560pt centred column in a 620x720 window. No nav bar; the
+    name lives in the title bar. SOURCE card, then DEEPL card, then the filled
+    Translate button with both exports as plain tinted text. Status appears under
+    the actions only when there is something to say.
+    FORM: The platform canon, taken deliberately because the brief pinned it.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the
+    finish review, the verdict, DESIGN.md, and every shipping raster carrying its
+    provenance.
+    -->
 
     <ScrollView>
-        <VerticalStackLayout Margin="20"
-                             Spacing="12"
-                             MaximumWidthRequest="900"
-                             HorizontalOptions="Fill">
+        <VerticalStackLayout Padding="0,26,0,32"
+                             Spacing="22"
+                             WidthRequest="552"
+                             HorizontalOptions="Center">
 
-            <Label Text="DeepL API key" FontAttributes="Bold" />
-            <Entry x:Name="AuthKeyEntry"
-                   Placeholder="Paste your DeepL API key (stored locally)"
-                   IsPassword="True"
-                   Completed="OnAuthKeyCompleted"
-                   Unfocused="OnAuthKeyUnfocused" />
+            <!-- ============ SOURCE ============ -->
+            <VerticalStackLayout Spacing="0">
+                <Label Text="Source" Style="{StaticResource SectionHeader}" />
 
-            <Label Text="Target language (leave empty to translate all missing languages)" FontAttributes="Bold" />
-            <Picker x:Name="LanguagePicker"
-                    Title="All languages"
-                    HorizontalOptions="Fill" />
+                <Border x:Name="SourceCard" Style="{StaticResource Card}">
+                    <Border.GestureRecognizers>
+                        <DropGestureRecognizer AllowDrop="True"
+                                               DragOver="OnSourceDragOver"
+                                               DragLeave="OnSourceDragLeave"
+                                               Drop="OnSourceDrop" />
+                    </Border.GestureRecognizers>
 
-            <Button x:Name="PickFileButton"
-                    Text="Select RESX, Excel, or CSV File"
-                    Clicked="OnFilePickerButtonClicked" />
+                    <VerticalStackLayout>
+                        <Grid ColumnDefinitions="Auto,*,Auto"
+                              ColumnSpacing="10"
+                              Padding="14,11"
+                              MinimumHeightRequest="44">
 
-            <Label x:Name="SelectedFileLabel"
-                   Text="No file selected."
-                   LineBreakMode="MiddleTruncation" />
+                            <controls:SymbolImage x:Name="SourceIcon"
+                                                  Grid.Column="0"
+                                                  Symbol="doc.badge.plus"
+                                                  PointSize="19"
+                                                  Tint="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                  VerticalOptions="Center" />
 
-            <Button x:Name="TranslateButton"
-                    Text="Translate"
-                    Clicked="OnTranslateButtonClicked" />
+                            <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                <Label x:Name="SourceTitleLabel"
+                                       Text="No file selected"
+                                       Style="{StaticResource RowTitle}"
+                                       LineBreakMode="MiddleTruncation" />
+                                <Label x:Name="SourceSubtitleLabel"
+                                       Text="RESX, Excel or CSV — or drag one here"
+                                       Style="{StaticResource RowFooter}"
+                                       LineBreakMode="TailTruncation" />
+                            </VerticalStackLayout>
 
-            <Button x:Name="ExportButton"
-                    Text="Export to Excel (.xlsx)"
-                    Clicked="OnSaveToExcelButtonClicked" />
+                            <!-- An explicit button, not a tappable row: this is the
+                                 macOS convention for choosing a file, and unlike a
+                                 bare gesture on a layout it is a real control. -->
+                            <controls:ActionButton x:Name="PickFileButton"
+                                                   Grid.Column="2"
+                                                   Text="Choose File…"
+                                                   Prominence="Plain"
+                                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                   FontSize="13"
+                                                   VerticalOptions="Center"
+                                                   Clicked="OnFilePickerButtonClicked" />
+                        </Grid>
 
-            <Button x:Name="ExportCsvButton"
-                    Text="Export to CSV"
-                    Clicked="OnSaveToCsvButtonClicked" />
+                        <BoxView x:Name="SourceSeparator"
+                                 Style="{StaticResource RowSeparator}"
+                                 IsVisible="False" />
 
-            <ProgressBar x:Name="translationProgressBar" Progress="0" />
+                        <Label x:Name="SourceDetailLabel"
+                               Style="{StaticResource RowFooter}"
+                               Padding="14,10"
+                               LineBreakMode="TailTruncation"
+                               IsVisible="False" />
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
 
-            <Label x:Name="StatusLabel" Text="Ready." LineBreakMode="WordWrap" />
+            <!-- ============ DEEPL ============ -->
+            <VerticalStackLayout Spacing="0">
+                <Label Text="DeepL" Style="{StaticResource SectionHeader}" />
+
+                <Border Style="{StaticResource Card}">
+                    <VerticalStackLayout>
+
+                        <Grid ColumnDefinitions="Auto,*,Auto"
+                              ColumnSpacing="10"
+                              Padding="14,9"
+                              MinimumHeightRequest="44">
+                            <Label Grid.Column="0"
+                                   Text="API key"
+                                   Style="{StaticResource RowTitle}" />
+
+                            <Border x:Name="AuthKeyWell"
+                                    Grid.Column="1"
+                                    Style="{StaticResource FieldWell}">
+                                <Entry x:Name="AuthKeyEntry"
+                                       Placeholder="Paste your key"
+                                       IsPassword="True"
+                                       FontSize="13"
+                                       Completed="OnAuthKeyCompleted"
+                                       Unfocused="OnAuthKeyUnfocused"
+                                       Focused="OnAuthKeyFocused"
+                                       TextChanged="OnAuthKeyTextChanged" />
+                            </Border>
+
+                            <controls:ActionButton x:Name="RevealKeyButton"
+                                                   Grid.Column="2"
+                                                   Text="Show"
+                                                   Prominence="Plain"
+                                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                   FontSize="13"
+                                                   Clicked="OnRevealKeyClicked" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource RowSeparator}" />
+
+                        <Grid ColumnDefinitions="Auto,*"
+                              ColumnSpacing="10"
+                              Padding="14,9"
+                              MinimumHeightRequest="44">
+                            <Label Grid.Column="0"
+                                   Text="Translate into"
+                                   Style="{StaticResource RowTitle}"
+                                   VerticalOptions="Center" />
+
+                            <controls:MenuButton x:Name="LanguageMenuButton"
+                                                 Grid.Column="1"
+                                                 FontSize="13"
+                                                 Placeholder="All languages"
+                                                 HorizontalOptions="End"
+                                                 MinimumWidthRequest="190"
+                                                 SelectionChanged="OnLanguageSelected"
+                                                 Clicked="OnLanguageMenuFallbackClicked" />
+                        </Grid>
+
+                        <BoxView x:Name="UsageSeparator"
+                                 Style="{StaticResource RowSeparator}"
+                                 IsVisible="False" />
+
+                        <Label x:Name="UsageLabel"
+                               Style="{StaticResource RowFooter}"
+                               Padding="14,10"
+                               IsVisible="False" />
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- ============ ACTIONS ============ -->
+            <VerticalStackLayout Spacing="4" Margin="0,2,0,0">
+                <controls:ActionButton x:Name="TranslateButton"
+                                       Text="Translate"
+                                       Prominence="Filled"
+                                       Accent="{AppThemeBinding Light={StaticResource AccentFillLight}, Dark={StaticResource AccentFillDark}}"
+                                       FontSize="14"
+                                       FontAttributes="Bold"
+                                       MinimumHeightRequest="34"
+                                       MinimumWidthRequest="170"
+                                       HorizontalOptions="Center"
+                                       Clicked="OnTranslateButtonClicked" />
+
+                <HorizontalStackLayout HorizontalOptions="Center" Spacing="6">
+                    <controls:ActionButton x:Name="ExportButton"
+                                           Text="Export to Excel"
+                                           Prominence="Plain"
+                                           Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                           FontSize="13"
+                                           Clicked="OnSaveToExcelButtonClicked" />
+                    <controls:ActionButton x:Name="ExportCsvButton"
+                                           Text="Export to CSV"
+                                           Prominence="Plain"
+                                           Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                           FontSize="13"
+                                           Clicked="OnSaveToCsvButtonClicked" />
+                </HorizontalStackLayout>
+            </VerticalStackLayout>
+
+            <!-- ============ STATUS ============ -->
+            <VerticalStackLayout x:Name="StatusBlock" Spacing="10" IsVisible="False">
+
+                <!-- Hand-drawn progress: MAUI's ProgressBar maps to UIProgressView,
+                     whose fixed intrinsic height ignores HeightRequest. -->
+                <VerticalStackLayout x:Name="ProgressGroup" Spacing="7" IsVisible="False">
+                    <Border HeightRequest="4"
+                            StrokeThickness="0"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource ControlFillLight}, Dark={StaticResource ControlFillDark}}"
+                            StrokeShape="RoundRectangle 2"
+                            HorizontalOptions="Fill">
+                        <Grid x:Name="ProgressTrack" ColumnDefinitions="0*,1*">
+                            <BoxView Grid.Column="0"
+                                     Color="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
+                        </Grid>
+                    </Border>
+                    <Label x:Name="ProgressLabel" Style="{StaticResource RowValue}" />
+                </VerticalStackLayout>
+
+                <Grid x:Name="ResultGroup"
+                      ColumnDefinitions="Auto,*"
+                      ColumnSpacing="8"
+                      IsVisible="False">
+                    <controls:SymbolImage x:Name="ResultIcon"
+                                          Grid.Column="0"
+                                          PointSize="15"
+                                          VerticalOptions="Start"
+                                          Margin="0,1,0,0" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="4">
+                        <Label x:Name="ResultTitleLabel" Style="{StaticResource StatusTitle}" />
+                        <Label x:Name="ResultDetailLabel"
+                               Style="{StaticResource RowFooter}"
+                               LineBreakMode="WordWrap"
+                               IsVisible="False" />
+                        <VerticalStackLayout x:Name="ResultFileList" Spacing="2" IsVisible="False" />
+                    </VerticalStackLayout>
+                </Grid>
+            </VerticalStackLayout>
 
         </VerticalStackLayout>
     </ScrollView>
