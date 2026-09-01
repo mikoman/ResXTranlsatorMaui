@@ -181,23 +181,38 @@
 
                         <BoxView Style="{StaticResource RowSeparator}" />
 
-                        <Grid ColumnDefinitions="Auto,*"
+                        <Grid ColumnDefinitions="Auto,*,Auto"
                               ColumnSpacing="10"
                               Padding="14,9"
-                              MinimumHeightRequest="44">
+                              MinimumHeightRequest="48">
                             <Label Grid.Column="0"
                                    Text="Translate into"
                                    Style="{StaticResource RowTitle}"
                                    VerticalOptions="Center" />
 
-                            <controls:MenuButton x:Name="LanguageMenuButton"
-                                                 Grid.Column="1"
-                                                 FontSize="13"
-                                                 Placeholder="All languages"
-                                                 HorizontalOptions="End"
-                                                 MinimumWidthRequest="190"
-                                                 SelectionChanged="OnLanguageSelected"
-                                                 Clicked="OnLanguageMenuFallbackClicked" />
+                            <VerticalStackLayout Grid.Column="1"
+                                                 Spacing="1"
+                                                 VerticalOptions="Center"
+                                                 HorizontalOptions="End">
+                                <Label x:Name="LanguageNameLabel"
+                                       Text="No language selected"
+                                       Style="{StaticResource RowValue}"
+                                       HorizontalTextAlignment="End"
+                                       LineBreakMode="TailTruncation" />
+                                <Label x:Name="LanguageCodeLabel"
+                                       Style="{StaticResource RowFooter}"
+                                       HorizontalTextAlignment="End"
+                                       IsVisible="False" />
+                            </VerticalStackLayout>
+
+                            <controls:ActionButton x:Name="ChooseLanguageButton"
+                                                   Grid.Column="2"
+                                                   Text="Choose…"
+                                                   Prominence="Plain"
+                                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                   FontSize="13"
+                                                   Clicked="OnChooseLanguageClicked"
+                                                   SemanticProperties.Description="Choose target language" />
                         </Grid>
 
                         <BoxView x:Name="UsageSeparator"

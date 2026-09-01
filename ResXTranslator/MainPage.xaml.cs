@@ -7,14 +7,12 @@ public partial class MainPage : ContentPage
     const int BatchSize = 50;
     const int MaxBatchCharacters = 16_000;
 
-    /// <summary>Sentinel row meaning "every configured language".</summary>
-    static readonly MenuOption AllLanguagesOption = new("All languages");
-
     readonly OpenRouterClient _openRouterClient = new();
     string? _selectedFilePath;
     PickedFolder? _pickedFolder;
     IReadOnlyList<string> _folderResxFiles = [];
     TranslationSpreadsheetDocument? _translationDocument;
+    TargetLanguageOption? _selectedLanguage;
     string? _apiKey;
     IReadOnlyList<OpenRouterModel> _models = [];
     OpenRouterModel? _selectedModel;
@@ -32,7 +30,7 @@ public partial class MainPage : ContentPage
     {
         InitializeComponent();
         RestoreSelectedModel();
-        RenderLanguageOptions();
+        RenderLanguageState();
         RenderSourceRow();
         RenderOpenRouterState();
         UpdateActionState();
@@ -286,47 +284,48 @@ public partial class MainPage : ContentPage
 
     // -------------------------------------------------------------- Languages
 
-    /// <summary>
-    /// Rebuilds the pull-down. "All languages" leads so the selection can always
-    /// be cleared, and a language the loaded spreadsheet already has renders
-    /// disabled rather than throwing after Translate is pressed.
-    /// </summary>
-    void RenderLanguageOptions()
+    void RenderLanguageState()
     {
-        var options = new List<MenuOption>(LanguageCatalog.All.Length + 1) { AllLanguagesOption };
-
-        foreach (var language in LanguageCatalog.All)
+        if (_selectedLanguage is null)
         {
-            var alreadyPresent = _translationDocument?.HasLanguage(language.ColumnHeader) == true;
-
-            options.Add(new MenuOption(
-                language.DisplayName,
-                language,
-                alreadyPresent ? "already translated" : null,
-                !alreadyPresent));
+            LanguageNameLabel.Text = "No language selected";
+            LanguageCodeLabel.IsVisible = false;
+            return;
         }
 
-        LanguageMenuButton.SetOptions(options);
-        LanguageMenuButton.SelectedOption ??= AllLanguagesOption;
+        var alreadyPresent = _translationDocument?.HasLanguage(_selectedLanguage.ColumnHeader) == true;
+        LanguageNameLabel.Text = alreadyPresent
+            ? "Already in spreadsheet"
+            : _selectedLanguage.DisplayName;
+        LanguageCodeLabel.Text = _selectedLanguage.ColumnHeader;
+        LanguageCodeLabel.IsVisible = true;
     }
 
-    void OnLanguageSelected(object? sender, MenuOption option) => UpdateActionState();
-
-    // Apple sets ShowsMenuAsPrimaryAction, which suppresses TouchUpInside, so
-    // Clicked never fires there. Android has no anchored pull-down and needs the
-    // action-sheet fallback.
-    void OnLanguageMenuFallbackClicked(object? sender, EventArgs e)
+    async void OnChooseLanguageClicked(object? sender, EventArgs e)
     {
-#if ANDROID
-        _ = MenuButtonPlatform.ShowFallbackAsync(LanguageMenuButton);
-#endif
+        if (_isBusy)
+        {
+            return;
+        }
+
+        var page = new LanguageSelectionPage(
+            _selectedLanguage?.ColumnHeader,
+            _translationDocument?.LanguageHeaders);
+        await Navigation.PushModalAsync(page);
+        var language = await page.Completion;
+
+        if (language is null)
+        {
+            return;
+        }
+
+        _selectedLanguage = language;
+        RenderLanguageState();
+        UpdateActionState();
     }
 
-    TargetLanguageOption? GetSelectedLanguage() =>
-        LanguageMenuButton.SelectedOption?.Tag as TargetLanguageOption;
-
-    IReadOnlyList<TargetLanguageOption> GetSelectedLanguages() =>
-        GetSelectedLanguage() is { } selected ? [selected] : LanguageCatalog.All;
+    TargetLanguageOption GetSelectedLanguage() => _selectedLanguage
+        ?? throw new InvalidOperationException("Choose a target language first.");
 
     // ------------------------------------------------------------- Source file
 
@@ -390,7 +389,7 @@ public partial class MainPage : ContentPage
             _folderResxFiles = files;
 
             RenderSourceRow();
-            RenderLanguageOptions();
+            RenderLanguageState();
             UpdateActionState();
             ClearStatus();
 
@@ -438,7 +437,7 @@ public partial class MainPage : ContentPage
         _selectedFilePath = fullPath;
 
         RenderSourceRow();
-        RenderLanguageOptions();
+        RenderLanguageState();
         UpdateActionState();
         ClearStatus();
     }
@@ -723,7 +722,7 @@ public partial class MainPage : ContentPage
             throw new InvalidOperationException("The selected RESX file does not contain any string entries.");
         }
 
-        var languagesToTranslate = GetSelectedLanguages();
+        IReadOnlyList<TargetLanguageOption> languagesToTranslate = [GetSelectedLanguage()];
         var workItem = new ResXWorkItem(path, values);
         var progress = new TranslationProgress(languagesToTranslate.Count * values.Count);
         var writtenFiles = await TranslateResXWorkItemAsync(
@@ -763,7 +762,7 @@ public partial class MainPage : ContentPage
             throw new InvalidOperationException("The selected folder's RESX files do not contain any string entries.");
         }
 
-        var languagesToTranslate = GetSelectedLanguages();
+        IReadOnlyList<TargetLanguageOption> languagesToTranslate = [GetSelectedLanguage()];
         var totalEntries = translatableItems.Sum(item => item.Values.Count) * languagesToTranslate.Count;
         var progress = new TranslationProgress(totalEntries);
         var writtenFiles = new List<string>();
@@ -828,7 +827,7 @@ public partial class MainPage : ContentPage
                 var result = await _openRouterClient.TranslateAsync(
                     apiKey,
                     model.Id,
-                    $"{targetLanguage.DisplayName} ({targetLanguage.ColumnHeader})",
+                    targetLanguage.ModelTarget,
                     batch);
 
                 foreach (var translation in result.Translations)
@@ -860,19 +859,12 @@ public partial class MainPage : ContentPage
             ?? throw new InvalidOperationException("Please select the spreadsheet again.");
 
         var selectedLanguage = GetSelectedLanguage();
-        var languagesToTranslate = selectedLanguage is null
-            ? LanguageCatalog.All.Where(language => !document.HasLanguage(language.ColumnHeader)).ToArray()
-            : [selectedLanguage];
+        TargetLanguageOption[] languagesToTranslate = [selectedLanguage];
 
-        if (selectedLanguage is not null && document.HasLanguage(selectedLanguage.ColumnHeader))
+        if (document.HasLanguage(selectedLanguage.ColumnHeader))
         {
             throw new InvalidOperationException(
                 $"The document already contains a '{selectedLanguage.ColumnHeader}' translation column.");
-        }
-
-        if (languagesToTranslate.Length == 0)
-        {
-            throw new InvalidOperationException("The document already contains every configured target language.");
         }
 
         var sourceRows = document.GetSourceRows();
@@ -905,7 +897,7 @@ public partial class MainPage : ContentPage
                 var result = await _openRouterClient.TranslateAsync(
                     apiKey,
                     model.Id,
-                    $"{targetLanguage.DisplayName} ({targetLanguage.ColumnHeader})",
+                    targetLanguage.ModelTarget,
                     batch);
 
                 foreach (var translation in result.Translations)
@@ -930,7 +922,7 @@ public partial class MainPage : ContentPage
         await Task.Run(() => SaveDocument(document, outputPath, extension));
 
         ShowUsage(BuildUsageSummary(model));
-        RenderLanguageOptions();
+        RenderLanguageState();
         ShowSuccess(
             $"Added {string.Join(", ", languagesToTranslate.Select(language => language.ColumnHeader))}",
             null,
@@ -1026,7 +1018,7 @@ public partial class MainPage : ContentPage
         PickFolderButton.IsEnabled = !busy;
         ManageAccountButton.IsEnabled = !busy;
         ChooseModelButton.IsEnabled = !busy && !string.IsNullOrWhiteSpace(_apiKey);
-        LanguageMenuButton.IsEnabled = !busy;
+        ChooseLanguageButton.IsEnabled = !busy;
         ProgressGroup.IsVisible = busy;
 
         if (busy)
@@ -1059,11 +1051,14 @@ public partial class MainPage : ContentPage
         var hasUsableKey = !string.IsNullOrWhiteSpace(_apiKey) &&
             _connectionState is OpenRouterConnectionState.Connected or OpenRouterConnectionState.Unverified;
         var hasModel = _selectedModel is not null && !_selectedModelUnavailable;
+        var hasLanguage = _selectedLanguage is not null &&
+            _translationDocument?.HasLanguage(_selectedLanguage.ColumnHeader) != true;
         var hasSingleFile = _selectedFilePath is not null;
 
         ManageAccountButton.IsEnabled = !_isBusy;
         ChooseModelButton.IsEnabled = !_isBusy && hasUsableKey;
-        TranslateButton.IsEnabled = !_isBusy && hasSource && hasUsableKey && hasModel;
+        ChooseLanguageButton.IsEnabled = !_isBusy;
+        TranslateButton.IsEnabled = !_isBusy && hasSource && hasUsableKey && hasModel && hasLanguage;
         ExportButton.IsEnabled = !_isBusy && hasSingleFile;
         ExportCsvButton.IsEnabled = !_isBusy && hasSingleFile;
     }

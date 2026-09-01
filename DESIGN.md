@@ -4,7 +4,7 @@
 
 ResXTranslator is a compact native utility, not a dashboard or a web form. Its visual language follows Apple's grouped settings surfaces: semantic system-like backgrounds, inset row cards, hairline separators, SF Symbols, restrained system typography, and one violet primary action. The Mac Catalyst window remains `620×476`; long content and focused setup tasks scroll inside the window.
 
-The main-page story is source → OpenRouter account → compatible model → target language → Translate → progress/result. API-key management and model search remain separate modal sheets so credentials and catalog complexity do not clutter the primary workflow.
+The main-page story is source → OpenRouter account → compatible model → target language → Translate → progress/result. API-key management, model search, and world-language search remain separate modal sheets so credentials and catalog complexity do not clutter the primary workflow.
 
 ## Visual rules
 
@@ -13,12 +13,13 @@ The main-page story is source → OpenRouter account → compatible model → ta
 - Use SF Symbols through `SymbolImage`; do not introduce a second icon family.
 - Cards use 10pt rounded corners, one-pixel semantic separators, and grouped-list row spacing.
 - Text fields use `FieldWell`, including the violet focus ring. Search uses a native `Entry` inside that well to avoid Catalyst's off-style `UISearchBar` cancel treatment.
+- Target language is an explicit single selection from the platform culture catalog. The searchable sheet exposes neutral languages plus regional/script variants and their BCP-47 codes; there is deliberately no potentially costly “all world languages” action.
 - Progress is both determinate and active: the label reports file, language, batch, entry count, model wait, and elapsed time. The pulse becomes static when Reduce Motion is enabled.
 - Every action remains keyboard focusable and has an accessible description where its visible label is not sufficient.
 
 ## Source and result behavior
 
-- A single RESX, CSV, or XLSX can be selected. A folder selection recursively discovers source RESX files, ignores generated configured-culture outputs, and writes each localized file beside its originating RESX.
+- A single RESX, CSV, or XLSX can be selected. A folder selection recursively discovers source RESX files, ignores generated culture-code outputs, and writes each localized file beside its originating RESX.
 - Folder and file actions stay explicit (`Choose File…`, `Choose Folder…`, `Change Folder…`).
 - Result paths are plain native actions that reveal their output in the platform file manager.
 - Sheets provide explicit Cancel controls; removing a stored credential requires confirmation.

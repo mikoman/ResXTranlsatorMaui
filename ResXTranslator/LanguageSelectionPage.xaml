@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<controls:ModalSheetPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                         xmlns:controls="clr-namespace:ResXTranslator.Controls"
+                         x:Class="ResXTranslator.LanguageSelectionPage"
+                         x:ClassModifier="internal"
+                         Title="Choose Language"
+                         Shell.NavBarIsVisible="False">
+
+    <Grid Padding="20,16,20,20"
+          RowDefinitions="Auto,Auto,Auto,*"
+          RowSpacing="12">
+        <Grid ColumnDefinitions="Auto,*,Auto" MinimumHeightRequest="32">
+            <controls:ActionButton Text="Cancel"
+                                   Prominence="Plain"
+                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                   FontSize="13"
+                                   Clicked="OnCancelClicked"
+                                   SemanticProperties.Description="Cancel language selection" />
+            <Label Grid.Column="1"
+                   Text="Choose Language"
+                   Style="{StaticResource StatusTitle}"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center" />
+            <Label Grid.Column="2"
+                   Text="World languages"
+                   Style="{StaticResource RowFooter}"
+                   VerticalOptions="Center" />
+        </Grid>
+
+        <Border x:Name="LanguageSearchWell"
+                Grid.Row="1"
+                Style="{StaticResource FieldWell}"
+                MinimumHeightRequest="40">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                <controls:SymbolImage Symbol="magnifyingglass"
+                                      PointSize="13"
+                                      Tint="{AppThemeBinding Light={StaticResource SecondaryLabelLight}, Dark={StaticResource SecondaryLabelDark}}"
+                                      VerticalOptions="Center" />
+                <Entry x:Name="LanguageSearchEntry"
+                       Grid.Column="1"
+                       Placeholder="Search languages, regions or culture codes"
+                       FontSize="13"
+                       ReturnType="Search"
+                       Focused="OnSearchFocused"
+                       Unfocused="OnSearchUnfocused"
+                       TextChanged="OnSearchTextChanged"
+                       SemanticProperties.Description="Search world languages and regional variants" />
+                <controls:ActionButton x:Name="ClearSearchButton"
+                                       Grid.Column="2"
+                                       Text="Clear"
+                                       Prominence="Plain"
+                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                       FontSize="12"
+                                       IsVisible="False"
+                                       Clicked="OnClearSearchClicked"
+                                       SemanticProperties.Description="Clear language search" />
+            </Grid>
+        </Border>
+
+        <Grid x:Name="LanguageNotice"
+              Grid.Row="2"
+              ColumnDefinitions="Auto,*"
+              ColumnSpacing="8"
+              Margin="6,0"
+              IsVisible="False">
+            <controls:SymbolImage Symbol="info.circle.fill"
+                                  PointSize="13"
+                                  Tint="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                  VerticalOptions="Center" />
+            <Label x:Name="LanguageNoticeLabel"
+                   Grid.Column="1"
+                   Style="{StaticResource RowFooter}"
+                   VerticalOptions="Center"
+                   LineBreakMode="WordWrap" />
+        </Grid>
+
+        <Grid Grid.Row="3">
+            <Border x:Name="LanguageListCard" Style="{StaticResource Card}">
+                <CollectionView x:Name="LanguageList"
+                                SelectionMode="Single"
+                                SelectionChanged="OnLanguageSelected">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <VerticalStackLayout Spacing="0">
+                                <Grid ColumnDefinitions="*,Auto"
+                                      RowDefinitions="Auto,Auto"
+                                      RowSpacing="1"
+                                      Padding="14,9"
+                                      MinimumHeightRequest="54"
+                                      Opacity="{Binding Opacity}"
+                                      SemanticProperties.Description="{Binding AccessibilityDescription}">
+                                    <Label Text="{Binding DisplayName}"
+                                           Style="{StaticResource RowTitle}"
+                                           LineBreakMode="TailTruncation" />
+                                    <Label Grid.Row="1"
+                                           Text="{Binding Detail}"
+                                           Style="{StaticResource RowFooter}"
+                                           LineBreakMode="MiddleTruncation" />
+                                    <Label Grid.Column="1"
+                                           Grid.RowSpan="2"
+                                           Text="{Binding UnavailableReason}"
+                                           Style="{StaticResource RowFooter}"
+                                           VerticalOptions="Center"
+                                           Margin="12,0,0,0" />
+                                    <controls:SymbolImage Grid.Column="1"
+                                                          Grid.RowSpan="2"
+                                                          Symbol="checkmark"
+                                                          PointSize="14"
+                                                          Bold="True"
+                                                          Tint="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                          VerticalOptions="Center"
+                                                          Margin="12,0,0,0"
+                                                          IsVisible="{Binding IsSelected}" />
+                                </Grid>
+                                <BoxView Style="{StaticResource RowSeparator}" />
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Border>
+
+            <VerticalStackLayout x:Name="LanguageState"
+                                 Spacing="8"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center"
+                                 MaximumWidthRequest="360"
+                                 IsVisible="False">
+                <controls:SymbolImage Symbol="magnifyingglass"
+                                      PointSize="24"
+                                      Tint="{AppThemeBinding Light={StaticResource SecondaryLabelLight}, Dark={StaticResource SecondaryLabelDark}}"
+                                      HorizontalOptions="Center" />
+                <Label Text="No matching languages"
+                       Style="{StaticResource StatusTitle}"
+                       HorizontalTextAlignment="Center" />
+                <Label Text="Try a language, country or region, native name, or culture code such as fr-CA."
+                       Style="{StaticResource RowFooter}"
+                       HorizontalTextAlignment="Center"
+                       LineBreakMode="WordWrap" />
+            </VerticalStackLayout>
+        </Grid>
+    </Grid>
+</controls:ModalSheetPage>

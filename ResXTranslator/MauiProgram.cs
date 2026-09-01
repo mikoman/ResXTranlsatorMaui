@@ -38,26 +38,6 @@ public static class MauiProgram
 	/// </summary>
 	static void CustomizeHandlers()
 	{
-		ButtonHandler.Mapper.AppendToMapping(MenuButton.MenuMapperKey, (handler, view) =>
-		{
-			if (view is not MenuButton menuButton)
-			{
-				return;
-			}
-
-#if IOS || MACCATALYST
-			if (handler.PlatformView is UIKit.UIButton native)
-			{
-				MenuButtonPlatform.Apply(menuButton, native);
-			}
-#elif WINDOWS
-			if (handler.PlatformView is Microsoft.UI.Xaml.Controls.Button native)
-			{
-				MenuButtonPlatform.Apply(menuButton, native);
-			}
-#endif
-		});
-
 		ButtonHandler.Mapper.AppendToMapping(ActionButton.ProminenceMapperKey, (handler, view) =>
 		{
 			if (view is not ActionButton button)
