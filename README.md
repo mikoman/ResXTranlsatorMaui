@@ -1,20 +1,20 @@
 # ResXTranslator
 
-ResXTranslator is a straightforward and UI-based .resx file translator designed for simplicity and efficiency. While its core functionality is tailored to specific needs, it can be effortlessly adapted to support a broader range of languages or additional features. The design is basic barely enough to be functional. You can change the list of languages in `MainPage.xaml.cs` if you need to do so.
+ResXTranslator is a focused, native utility for translating `.resx`, CSV, and Excel localization files. You can change the configured target languages in `LanguageCatalog.cs`.
 
 Built with **.NET 10** and **.NET MAUI**, and it runs as a native **Mac Catalyst** app on macOS.
 
 ## Features
 
-- Utilizes the **DeepL API** for translations using the [DeepL API .NET library](https://www.nuget.org/packages/DeepL.net/).
+- Uses an LLM through the [OpenRouter API](https://openrouter.ai/) with a fixed sports fan-engagement and ticketing localization context.
+- Loads OpenRouter's compatible model catalog, supports model search and pricing comparison, and stores the chosen model for the next run.
+- Stores the OpenRouter API key in the platform's secure credential storage rather than application preferences.
 - Exports translations to Excel using the MIT-licensed [ClosedXML library](https://github.com/ClosedXML/ClosedXML).
 - Imports translation audit documents from CSV or Excel (`.xlsx`) and adds new language/value and status columns without overwriting the source.
 - Exports spreadsheet translations to either Excel or CSV while preserving the original column order and multiline CSV values.
 - Support for multiple languages (easy to extend).
-- Translations are batched (up to 50 strings per API request) with live progress.
+- Translations are batched (up to 50 strings per API request), returned as validated structured output, and shown with live progress and token usage.
 - Output files are written next to the source `.resx` file, with no machine-specific paths.
-
-🔜 **Coming Soon:** Google Translate API integration!
 
 ## Running on macOS
 
@@ -49,18 +49,18 @@ To build the other targets, swap the framework: `net10.0-ios`, `net10.0-android`
 
 ## Usage
 
-1. Paste your DeepL API key into the field at the top. It is stored locally with the MAUI `Preferences` API, so you only enter it once.
-2. Click **Select RESX, Excel, or CSV File** and pick a `.resx`, `.xlsx`, or `.csv` file. Spreadsheet files must follow the translation audit layout with a `Default` column and adjacent language/status pairs such as `fr` and `fr Status`.
-3. Optionally pick a single target language; leaving the picker empty translates into every configured language for RESX, or every configured language missing from a spreadsheet.
-4. Click **Translate**. RESX results are written as `<SourceName>.<culture>.resx` (for example `AppResources.pt-PT.resx`). For CSV/Excel input, each missing language is inserted after the last language/status pair and a `.translated.csv` or `.translated.xlsx` copy is written. The source file is not overwritten.
-5. **Export to Excel** or **Export to CSV** writes the currently loaded data to the selected format in the same output folder.
+1. Under **OpenRouter**, open **Manage…**, paste an [OpenRouter API key](https://openrouter.ai/keys), and connect. The validated key is saved in the platform's secure credential store and is never shown again after the sheet closes.
+2. Choose **Model…**, search the live structured-output model catalog, review its input/output token prices, and select a model.
+3. Choose or drag in a `.resx`, `.xlsx`, or `.csv` file. Spreadsheet files must follow the translation audit layout with a `Default` column and adjacent language/status pairs such as `fr` and `fr Status`.
+4. Optionally pick a single target language; leaving the menu on **All languages** translates every configured language for RESX, or every configured language missing from a spreadsheet.
+5. Click **Translate**. The LLM translates each complete resource string with sports fan-engagement and ticketing context while preserving placeholders and markup. RESX results are written as `<SourceName>.<culture>.resx` (for example `AppResources.pt-PT.resx`). CSV/Excel input produces a non-overwriting `.translated` copy.
+6. **Export to Excel** or **Export to CSV** writes the currently loaded data to the selected format in the same output folder.
 
 ## Dependencies
 
 ResXTranslator uses these NuGet packages:
-- [DeepL.net](https://www.nuget.org/packages/DeepL.net/) for smooth integration with the DeepL translation service.
 - [ClosedXML](https://github.com/ClosedXML/ClosedXML) for reading and writing `.xlsx` workbooks. ClosedXML is distributed under the MIT license.
-- The app includes its own small CSV reader/writer, so CSV support has no additional package dependency.
+- OpenRouter integration and CSV support use .NET platform APIs and add no extra package dependencies.
 
 ## Inspiration
 

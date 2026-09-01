@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<controls:ModalSheetPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                         xmlns:controls="clr-namespace:ResXTranslator.Controls"
+                         x:Class="ResXTranslator.OpenRouterModelPage"
+                         x:ClassModifier="internal"
+                         Title="Choose Model"
+                         Shell.NavBarIsVisible="False">
+
+    <Grid Padding="20,16,20,20"
+          RowDefinitions="Auto,Auto,Auto,*"
+          RowSpacing="12">
+        <Grid ColumnDefinitions="Auto,*,Auto" MinimumHeightRequest="32">
+            <controls:ActionButton Text="Cancel"
+                                   Prominence="Plain"
+                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                   FontSize="13"
+                                   Clicked="OnCancelClicked" />
+            <Label Grid.Column="1"
+                   Text="Choose Model"
+                   Style="{StaticResource StatusTitle}"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center" />
+            <controls:ActionButton Grid.Column="2"
+                                   Text="Refresh"
+                                   Prominence="Plain"
+                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                   FontSize="13"
+                                   Clicked="OnRefreshClicked" />
+        </Grid>
+
+        <SearchBar x:Name="ModelSearchBar"
+                   Grid.Row="1"
+                   Placeholder="Search names, providers or model IDs"
+                   TextChanged="OnSearchTextChanged"
+                   SemanticProperties.Description="Search OpenRouter models" />
+
+        <Grid x:Name="CatalogNotice"
+              Grid.Row="2"
+              ColumnDefinitions="Auto,*,Auto"
+              ColumnSpacing="8"
+              Margin="6,0"
+              IsVisible="False">
+            <controls:SymbolImage Symbol="exclamationmark.triangle.fill"
+                                  PointSize="13"
+                                  Tint="{AppThemeBinding Light={StaticResource WarningLight}, Dark={StaticResource WarningDark}}"
+                                  VerticalOptions="Center" />
+            <Label x:Name="CatalogNoticeLabel"
+                   Grid.Column="1"
+                   Style="{StaticResource RowFooter}"
+                   VerticalOptions="Center"
+                   LineBreakMode="WordWrap" />
+            <controls:ActionButton Grid.Column="2"
+                                   Text="Retry"
+                                   Prominence="Plain"
+                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                   FontSize="12"
+                                   Clicked="OnRefreshClicked" />
+        </Grid>
+
+        <Grid Grid.Row="3">
+            <Border x:Name="ModelListCard" Style="{StaticResource Card}">
+                <CollectionView x:Name="ModelList"
+                                SelectionMode="Single"
+                                SelectionChanged="OnModelSelected">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <VerticalStackLayout Spacing="0">
+                                <Grid ColumnDefinitions="*,Auto"
+                                      RowDefinitions="Auto,Auto,Auto"
+                                      RowSpacing="1"
+                                      Padding="14,9"
+                                      MinimumHeightRequest="62">
+                                    <Label Text="{Binding Name}"
+                                           Style="{StaticResource RowTitle}"
+                                           LineBreakMode="TailTruncation" />
+                                    <Label Grid.Row="1"
+                                           Text="{Binding Id}"
+                                           Style="{StaticResource RowFooter}"
+                                           LineBreakMode="MiddleTruncation" />
+                                    <Label Grid.Row="2"
+                                           Text="{Binding PriceDescription}"
+                                           Style="{StaticResource RowFooter}"
+                                           LineBreakMode="TailTruncation" />
+                                    <controls:SymbolImage Grid.Column="1"
+                                                          Grid.RowSpan="3"
+                                                          Symbol="checkmark"
+                                                          PointSize="14"
+                                                          Bold="True"
+                                                          Tint="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                          VerticalOptions="Center"
+                                                          Margin="12,0,0,0"
+                                                          IsVisible="{Binding IsSelected}" />
+                                </Grid>
+                                <BoxView Style="{StaticResource RowSeparator}" />
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Border>
+
+            <VerticalStackLayout x:Name="ModelState"
+                                 Spacing="8"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center"
+                                 MaximumWidthRequest="360"
+                                 IsVisible="False">
+                <ActivityIndicator x:Name="ModelActivity" IsVisible="False" IsRunning="False" />
+                <controls:SymbolImage x:Name="ModelStateIcon"
+                                      Symbol="magnifyingglass"
+                                      PointSize="24"
+                                      Tint="{AppThemeBinding Light={StaticResource SecondaryLabelLight}, Dark={StaticResource SecondaryLabelDark}}"
+                                      HorizontalOptions="Center" />
+                <Label x:Name="ModelStateTitle"
+                       Style="{StaticResource StatusTitle}"
+                       HorizontalTextAlignment="Center" />
+                <Label x:Name="ModelStateDetail"
+                       Style="{StaticResource RowFooter}"
+                       HorizontalTextAlignment="Center"
+                       LineBreakMode="WordWrap" />
+                <controls:ActionButton x:Name="ModelRetryButton"
+                                       Text="Try Again"
+                                       Prominence="Plain"
+                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                       FontSize="13"
+                                       Clicked="OnRefreshClicked"
+                                       IsVisible="False" />
+            </VerticalStackLayout>
+        </Grid>
+    </Grid>
+</controls:ModalSheetPage>

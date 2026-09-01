@@ -15,13 +15,13 @@
     #2C2C2E rows in 10pt cards, hairline inset separators, SF Pro at system text
     sizes, SF Symbols, and one violet tint from #512BD4 used only on the primary
     action, the selected checkmark, the focus ring and the progress bar.
-    STORY: The user sees a file, a key and a language; understands what will be
-    written and where; presses Translate once; watches determinate progress; ends
-    with a result they can reveal in Finder.
-    FIRST VIEWPORT: A 560pt centred column in a 620x720 window. No nav bar; the
-    name lives in the title bar. SOURCE card, then DEEPL card, then the filled
-    Translate button with both exports as plain tinted text. Status appears under
-    the actions only when there is something to say.
+    STORY: The user sees a file, an OpenRouter account, a model and a language;
+    understands what will be written and where; presses Translate once; watches
+    determinate progress; ends with a result they can reveal in Finder.
+    FIRST VIEWPORT: A 552pt centred column in a compact 620pt window. No nav bar;
+    the name lives in the title bar. SOURCE card, then OPENROUTER card, then the
+    filled Translate button with both exports as plain tinted text. Credentials
+    and the searchable catalog live in focused sheets, never inline clutter.
     FORM: The platform canon, taken deliberately because the brief pinned it.
     FINISH: unreviewed and undocumented is unfinished; this build ends with the
     finish review, the verdict, DESIGN.md, and every shipping raster carrying its
@@ -96,41 +96,77 @@
                 </Border>
             </VerticalStackLayout>
 
-            <!-- ============ DEEPL ============ -->
+            <!-- ============ OPENROUTER ============ -->
             <VerticalStackLayout Spacing="0">
-                <Label Text="DeepL" Style="{StaticResource SectionHeader}" />
+                <Label Text="OpenRouter" Style="{StaticResource SectionHeader}" />
 
                 <Border Style="{StaticResource Card}">
                     <VerticalStackLayout>
 
-                        <Grid ColumnDefinitions="Auto,*,Auto"
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto"
                               ColumnSpacing="10"
-                              Padding="14,9"
+                              Padding="14,10"
                               MinimumHeightRequest="44">
                             <Label Grid.Column="0"
-                                   Text="API key"
-                                   Style="{StaticResource RowTitle}" />
+                                   Text="Account"
+                                   Style="{StaticResource RowTitle}"
+                                   VerticalOptions="Center" />
 
-                            <Border x:Name="AuthKeyWell"
+                            <controls:SymbolImage x:Name="AccountIcon"
                                     Grid.Column="1"
-                                    Style="{StaticResource FieldWell}">
-                                <Entry x:Name="AuthKeyEntry"
-                                       Placeholder="Paste your key"
-                                       IsPassword="True"
-                                       FontSize="13"
-                                       Completed="OnAuthKeyCompleted"
-                                       Unfocused="OnAuthKeyUnfocused"
-                                       Focused="OnAuthKeyFocused"
-                                       TextChanged="OnAuthKeyTextChanged" />
-                            </Border>
+                                                  Symbol="key.fill"
+                                                  PointSize="14"
+                                                  VerticalOptions="Center" />
 
-                            <controls:ActionButton x:Name="RevealKeyButton"
-                                                   Grid.Column="2"
-                                                   Text="Show"
+                            <Label x:Name="AccountStatusLabel"
+                                   Grid.Column="2"
+                                   Text="Not connected"
+                                   Style="{StaticResource RowValue}"
+                                   HorizontalOptions="End"
+                                   VerticalOptions="Center" />
+
+                            <controls:ActionButton x:Name="ManageAccountButton"
+                                                   Grid.Column="3"
+                                                   Text="Manage…"
                                                    Prominence="Plain"
                                                    Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
                                                    FontSize="13"
-                                                   Clicked="OnRevealKeyClicked" />
+                                                   Clicked="OnManageAccountClicked" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource RowSeparator}" />
+
+                        <Grid ColumnDefinitions="Auto,*,Auto"
+                              ColumnSpacing="10"
+                              Padding="14,9"
+                              MinimumHeightRequest="48">
+                            <Label Text="Model"
+                                   Style="{StaticResource RowTitle}"
+                                   VerticalOptions="Center" />
+
+                            <VerticalStackLayout Grid.Column="1"
+                                                 Spacing="1"
+                                                 VerticalOptions="Center"
+                                                 HorizontalOptions="End">
+                                <Label x:Name="ModelNameLabel"
+                                       Text="Connect first"
+                                       Style="{StaticResource RowValue}"
+                                       HorizontalTextAlignment="End"
+                                       LineBreakMode="TailTruncation" />
+                                <Label x:Name="ModelIdLabel"
+                                       Style="{StaticResource RowFooter}"
+                                       HorizontalTextAlignment="End"
+                                       LineBreakMode="MiddleTruncation"
+                                       IsVisible="False" />
+                            </VerticalStackLayout>
+
+                            <controls:ActionButton x:Name="ChooseModelButton"
+                                                   Grid.Column="2"
+                                                   Text="Choose…"
+                                                   Prominence="Plain"
+                                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                   FontSize="13"
+                                                   Clicked="OnChooseModelClicked" />
                         </Grid>
 
                         <BoxView Style="{StaticResource RowSeparator}" />

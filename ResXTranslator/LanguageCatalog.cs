@@ -1,12 +1,10 @@
-using DeepL;
-
 namespace ResXTranslator;
 
 /// <summary>
-/// A DeepL target language, its display name, and the culture suffix used for
-/// both the output <c>.resx</c> filename and the spreadsheet column header.
+/// A target language display name and the culture suffix used for both the
+/// output <c>.resx</c> filename and the spreadsheet column header.
 /// </summary>
-sealed record TargetLanguageOption(string DisplayName, string DeepLCode, string ColumnHeader)
+sealed record TargetLanguageOption(string DisplayName, string ColumnHeader)
 {
     public override string ToString() => $"{DisplayName} ({ColumnHeader})";
 }
@@ -22,10 +20,10 @@ static class LanguageCatalog
     /// </summary>
     public static readonly TargetLanguageOption[] All =
     [
-        new("Portuguese (Portugal)", LanguageCode.PortugueseEuropean, "pt-PT"),
-        new("Italian", LanguageCode.Italian, "it"),
-        new("German", LanguageCode.German, "de"),
-        new("Spanish", LanguageCode.Spanish, "es"),
-        new("French", LanguageCode.French, "fr")
+        new("Portuguese (Portugal)", "pt-PT"),
+        new("Italian", "it"),
+        new("German", "de"),
+        new("Spanish", "es"),
+        new("French", "fr")
     ];
 }

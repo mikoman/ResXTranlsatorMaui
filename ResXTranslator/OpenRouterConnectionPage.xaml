@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<controls:ModalSheetPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                         xmlns:controls="clr-namespace:ResXTranslator.Controls"
+                         x:Class="ResXTranslator.OpenRouterConnectionPage"
+                         x:ClassModifier="internal"
+                         Title="OpenRouter Account"
+                         Shell.NavBarIsVisible="False">
+
+    <Grid Padding="20,16,20,22" RowDefinitions="Auto,*" RowSpacing="16">
+        <Grid ColumnDefinitions="Auto,*,Auto" MinimumHeightRequest="32">
+            <controls:ActionButton Text="Cancel"
+                                   Prominence="Plain"
+                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                   FontSize="13"
+                                   Clicked="OnCancelClicked"
+                                   SemanticProperties.Description="Cancel OpenRouter account setup" />
+            <Label Grid.Column="1"
+                   Text="OpenRouter Account"
+                   Style="{StaticResource StatusTitle}"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center" />
+            <BoxView Grid.Column="2" WidthRequest="52" Opacity="0" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="16"
+                                 MaximumWidthRequest="480"
+                                 HorizontalOptions="Center">
+
+                <VerticalStackLayout x:Name="ConnectedSection" Spacing="0">
+                    <Label Text="Account" Style="{StaticResource SectionHeader}" />
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout>
+                            <Grid ColumnDefinitions="Auto,*"
+                                  ColumnSpacing="10"
+                                  Padding="14,12"
+                                  MinimumHeightRequest="48">
+                                <controls:SymbolImage x:Name="StoredKeyIcon"
+                                                      Symbol="checkmark.circle.fill"
+                                                      PointSize="18"
+                                                      Tint="{AppThemeBinding Light={StaticResource SuccessLight}, Dark={StaticResource SuccessDark}}"
+                                                      VerticalOptions="Center" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                    <Label x:Name="StoredKeyTitleLabel"
+                                           Text="Connected"
+                                           Style="{StaticResource RowTitle}" />
+                                    <Label x:Name="StoredKeyDetailLabel"
+                                           Text="The API key is stored securely on this device."
+                                           Style="{StaticResource RowFooter}" />
+                                </VerticalStackLayout>
+                            </Grid>
+
+                            <BoxView Style="{StaticResource RowSeparator}" />
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6" Padding="8,3">
+                                <controls:ActionButton Text="Replace Key…"
+                                                       Prominence="Plain"
+                                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                       FontSize="13"
+                                                       Clicked="OnReplaceClicked" />
+                                <controls:ActionButton Grid.Column="1"
+                                                       Text="Remove Key"
+                                                       Prominence="Plain"
+                                                       Accent="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource DangerDark}}"
+                                                       FontSize="13"
+                                                       Clicked="OnRemoveClicked" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout x:Name="EditorSection" Spacing="0">
+                    <Label Text="API key" Style="{StaticResource SectionHeader}" />
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout>
+                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                  ColumnSpacing="10"
+                                  Padding="14,9"
+                                  MinimumHeightRequest="48">
+                                <Label Text="Key" Style="{StaticResource RowTitle}" />
+                                <Border x:Name="KeyWell"
+                                        Grid.Column="1"
+                                        Style="{StaticResource FieldWell}">
+                                    <Entry x:Name="KeyEntry"
+                                           Placeholder="sk-or-v1-…"
+                                           IsPassword="True"
+                                           FontSize="13"
+                                           ReturnType="Done"
+                                           Completed="OnConnectClicked"
+                                           Focused="OnKeyFocused"
+                                           Unfocused="OnKeyUnfocused"
+                                           TextChanged="OnKeyTextChanged"
+                                           SemanticProperties.Description="OpenRouter API key" />
+                                </Border>
+                                <controls:ActionButton x:Name="RevealButton"
+                                                       Grid.Column="2"
+                                                       Text="Show"
+                                                       Prominence="Plain"
+                                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                       FontSize="13"
+                                                       Clicked="OnRevealClicked" />
+                            </Grid>
+
+                            <BoxView Style="{StaticResource RowSeparator}" />
+                            <Label Text="Validated with OpenRouter, then stored in this device's secure credential store."
+                                   Style="{StaticResource RowFooter}"
+                                   Padding="14,10"
+                                   LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Grid x:Name="ConnectionError"
+                          ColumnDefinitions="Auto,*"
+                          ColumnSpacing="8"
+                          Margin="14,10,14,0"
+                          IsVisible="False">
+                        <controls:SymbolImage Symbol="exclamationmark.triangle.fill"
+                                              PointSize="14"
+                                              Tint="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource DangerDark}}"
+                                              VerticalOptions="Start" />
+                        <Label x:Name="ConnectionErrorLabel"
+                               Grid.Column="1"
+                               Style="{StaticResource RowFooter}"
+                               TextColor="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource DangerDark}}"
+                               LineBreakMode="WordWrap" />
+                    </Grid>
+
+                    <controls:ActionButton x:Name="ConnectButton"
+                                           Text="Connect"
+                                           Prominence="Filled"
+                                           Accent="{AppThemeBinding Light={StaticResource AccentFillLight}, Dark={StaticResource AccentFillDark}}"
+                                           FontSize="14"
+                                           FontAttributes="Bold"
+                                           MinimumWidthRequest="150"
+                                           HorizontalOptions="Center"
+                                           Margin="0,14,0,0"
+                                           Clicked="OnConnectClicked" />
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</controls:ModalSheetPage>

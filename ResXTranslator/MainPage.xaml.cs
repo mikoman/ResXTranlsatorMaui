@@ -1,29 +1,37 @@
-using DeepL;
 using ResXTranslator.Controls;
 
 namespace ResXTranslator;
 
 public partial class MainPage : ContentPage
 {
-    const string AuthKeyPreferenceKey = "deepl_auth_key";
     const int BatchSize = 50;
 
     /// <summary>Sentinel row meaning "every configured language".</summary>
     static readonly MenuOption AllLanguagesOption = new("All languages");
 
+    readonly OpenRouterClient _openRouterClient = new();
     string? _selectedFilePath;
     TranslationSpreadsheetDocument? _translationDocument;
+    string? _apiKey;
+    IReadOnlyList<OpenRouterModel> _models = [];
+    OpenRouterModel? _selectedModel;
+    OpenRouterConnectionState _connectionState = OpenRouterConnectionState.NotConnected;
+    OpenRouterTokenUsage _translationUsage;
+    bool _catalogLoadedSuccessfully;
+    bool _selectedModelUnavailable;
+    bool _initialized;
     bool _isBusy;
 
     public MainPage()
     {
         InitializeComponent();
-        AuthKeyEntry.Text = Preferences.Default.Get(AuthKeyPreferenceKey, string.Empty);
+        RestoreSelectedModel();
         RenderLanguageOptions();
         RenderSourceRow();
+        RenderOpenRouterState();
         UpdateActionState();
 
-        Loaded += (_, _) => WindowGeometry.ApplyOnce(Window);
+        Loaded += OnLoaded;
     }
 
     public Dictionary<string, string> ReadResXFile(string path) => new ResXParser().ReadResXFile(path);
@@ -31,33 +39,243 @@ public partial class MainPage : ContentPage
     public void WriteResXFile(string path, Dictionary<string, string> values) =>
         new ResXParser().WriteResXFile(path, values);
 
-    // ---------------------------------------------------------------- API key
+    // ------------------------------------------------------------- OpenRouter
 
-    void OnAuthKeyCompleted(object? sender, EventArgs e) => PersistAuthKey();
-
-    void OnAuthKeyUnfocused(object? sender, FocusEventArgs e)
+    async void OnLoaded(object? sender, EventArgs e)
     {
-        VisualStateManager.GoToState(AuthKeyWell, "Normal");
-        PersistAuthKey();
+        WindowGeometry.ApplyOnce(Window);
+
+        if (_initialized)
+        {
+            return;
+        }
+
+        _initialized = true;
+        await InitializeOpenRouterAsync();
     }
 
-    // UIKit draws no focus ring on Mac Catalyst, so the wrapping well draws ours.
-    void OnAuthKeyFocused(object? sender, FocusEventArgs e) =>
-        VisualStateManager.GoToState(AuthKeyWell, "Focused");
-
-    void OnAuthKeyTextChanged(object? sender, TextChangedEventArgs e) => UpdateActionState();
-
-    void OnRevealKeyClicked(object? sender, EventArgs e)
+    void RestoreSelectedModel()
     {
-        AuthKeyEntry.IsPassword = !AuthKeyEntry.IsPassword;
-        RevealKeyButton.Text = AuthKeyEntry.IsPassword ? "Show" : "Hide";
+        var savedId = Preferences.Default.Get(OpenRouterSettings.ModelPreferenceKey, string.Empty);
+
+        if (!string.IsNullOrWhiteSpace(savedId))
+        {
+            _selectedModel = new OpenRouterModel(savedId, savedId, null, null);
+        }
     }
 
-    void PersistAuthKey()
+    async Task InitializeOpenRouterAsync()
     {
-        var key = AuthKeyEntry.Text?.Trim() ?? string.Empty;
-        Preferences.Default.Set(AuthKeyPreferenceKey, key);
+        try
+        {
+            _apiKey = await OpenRouterCredentialStore.GetAsync();
+        }
+        catch (Exception ex)
+        {
+            _connectionState = OpenRouterConnectionState.NeedsAttention;
+            RenderOpenRouterState();
+            UpdateActionState();
+            ShowError($"The saved OpenRouter key could not be read from secure storage: {ex.Message}");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            _connectionState = OpenRouterConnectionState.NotConnected;
+            RenderOpenRouterState();
+            UpdateActionState();
+            return;
+        }
+
+        _connectionState = OpenRouterConnectionState.Checking;
+        RenderOpenRouterState();
         UpdateActionState();
+
+        try
+        {
+            await _openRouterClient.ValidateApiKeyAsync(_apiKey);
+        }
+        catch (OpenRouterApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            _connectionState = OpenRouterConnectionState.NeedsAttention;
+            RenderOpenRouterState();
+            UpdateActionState();
+            return;
+        }
+        catch (Exception)
+        {
+            // A network or service failure does not prove a stored credential is
+            // invalid. Keep it usable so the translation request can try later.
+            _connectionState = OpenRouterConnectionState.Unverified;
+            RenderOpenRouterState();
+            UpdateActionState();
+            return;
+        }
+
+        _connectionState = OpenRouterConnectionState.Connected;
+
+        try
+        {
+            await RefreshModelsAsync();
+        }
+        catch (Exception)
+        {
+            // Catalog availability is independent of credential validity. Keep
+            // the connected state and let the model sheet offer refresh/retry.
+        }
+
+        RenderOpenRouterState();
+        UpdateActionState();
+    }
+
+    async Task RefreshModelsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            return;
+        }
+
+        try
+        {
+            _models = await _openRouterClient.GetModelsAsync(_apiKey);
+            _catalogLoadedSuccessfully = true;
+            ResolveSelectedModel();
+        }
+        catch
+        {
+            _catalogLoadedSuccessfully = false;
+            _selectedModelUnavailable = false;
+            throw;
+        }
+    }
+
+    void ResolveSelectedModel()
+    {
+        var savedId = Preferences.Default.Get(OpenRouterSettings.ModelPreferenceKey, string.Empty);
+
+        if (string.IsNullOrWhiteSpace(savedId))
+        {
+            _selectedModel = null;
+            _selectedModelUnavailable = false;
+            return;
+        }
+
+        _selectedModel = _models.FirstOrDefault(model => model.Id == savedId)
+            ?? new OpenRouterModel(savedId, savedId, null, null);
+        _selectedModelUnavailable = _catalogLoadedSuccessfully &&
+            !_models.Any(model => model.Id == savedId);
+    }
+
+    async void OnManageAccountClicked(object? sender, EventArgs e)
+    {
+        if (_isBusy)
+        {
+            return;
+        }
+
+        var page = new OpenRouterConnectionPage(
+            _openRouterClient,
+            !string.IsNullOrWhiteSpace(_apiKey),
+            _connectionState);
+        await Navigation.PushModalAsync(page);
+        var result = await page.Completion;
+
+        switch (result.Outcome)
+        {
+            case OpenRouterConnectionOutcome.Connected when !string.IsNullOrWhiteSpace(result.ApiKey):
+                _apiKey = result.ApiKey;
+                _connectionState = OpenRouterConnectionState.Connected;
+
+                try
+                {
+                    await RefreshModelsAsync();
+                }
+                catch (Exception ex)
+                {
+                    ShowError($"Connected, but the model catalog could not be loaded: {ex.Message}");
+                }
+
+                break;
+            case OpenRouterConnectionOutcome.Removed:
+                _apiKey = null;
+                _models = [];
+                _catalogLoadedSuccessfully = false;
+                _selectedModelUnavailable = false;
+                _connectionState = OpenRouterConnectionState.NotConnected;
+                break;
+        }
+
+        RenderOpenRouterState();
+        UpdateActionState();
+    }
+
+    async void OnChooseModelClicked(object? sender, EventArgs e)
+    {
+        if (_isBusy || string.IsNullOrWhiteSpace(_apiKey))
+        {
+            return;
+        }
+
+        var page = new OpenRouterModelPage(
+            _openRouterClient,
+            _apiKey,
+            _models,
+            _selectedModel?.Id);
+        await Navigation.PushModalAsync(page);
+        var model = await page.Completion;
+
+        if (model is null)
+        {
+            return;
+        }
+
+        _selectedModel = model;
+        _selectedModelUnavailable = false;
+        Preferences.Default.Set(OpenRouterSettings.ModelPreferenceKey, model.Id);
+        RenderOpenRouterState();
+        UpdateActionState();
+    }
+
+    void RenderOpenRouterState()
+    {
+        var (symbol, lightColor, darkColor, status) = _connectionState switch
+        {
+            OpenRouterConnectionState.Checking =>
+                ("arrow.triangle.2.circlepath", "SecondaryLabelLight", "SecondaryLabelDark", "Checking…"),
+            OpenRouterConnectionState.Connected =>
+                ("checkmark.circle.fill", "SuccessLight", "SuccessDark", "Connected"),
+            OpenRouterConnectionState.Unverified =>
+                ("wifi.exclamationmark", "WarningLight", "WarningDark", "Couldn't verify"),
+            OpenRouterConnectionState.NeedsAttention =>
+                ("exclamationmark.triangle.fill", "DangerLight", "DangerDark", "Needs attention"),
+            _ => ("key.fill", "SecondaryLabelLight", "SecondaryLabelDark", "Not connected")
+        };
+
+        AccountIcon.Symbol = symbol;
+        AccountIcon.SetAppTheme(
+            SymbolImage.TintProperty,
+            Resource<Color>(lightColor),
+            Resource<Color>(darkColor));
+        AccountStatusLabel.Text = status;
+
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            ModelNameLabel.Text = "Connect first";
+            ModelIdLabel.IsVisible = false;
+        }
+        else if (_selectedModel is null)
+        {
+            ModelNameLabel.Text = "No model selected";
+            ModelIdLabel.IsVisible = false;
+        }
+        else
+        {
+            ModelNameLabel.Text = _selectedModelUnavailable
+                ? "Model unavailable"
+                : _selectedModel.Name;
+            ModelIdLabel.Text = _selectedModel.Id;
+            ModelIdLabel.IsVisible = true;
+        }
     }
 
     // -------------------------------------------------------------- Languages
@@ -369,25 +587,30 @@ public partial class MainPage : ContentPage
         try
         {
             var path = _selectedFilePath ?? throw new InvalidOperationException("Please select a file first.");
-            var authKey = AuthKeyEntry.Text?.Trim();
+            var apiKey = _apiKey ?? throw new InvalidOperationException("Connect an OpenRouter account first.");
+            var model = _selectedModel ?? throw new InvalidOperationException("Choose an OpenRouter model first.");
 
-            if (string.IsNullOrWhiteSpace(authKey))
+            if (_selectedModelUnavailable)
             {
-                throw new InvalidOperationException("Please enter your DeepL API key first.");
+                throw new InvalidOperationException("The selected OpenRouter model is unavailable. Choose another model.");
             }
 
-            PersistAuthKey();
-
-            using var client = new DeepLClient(authKey);
+            _translationUsage = default;
 
             if (IsResX(path))
             {
-                await TranslateResXAsync(client, path);
+                await TranslateResXAsync(apiKey, model, path);
             }
             else
             {
-                await TranslateSpreadsheetAsync(client, path);
+                await TranslateSpreadsheetAsync(apiKey, model, path);
             }
+        }
+        catch (OpenRouterApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            _connectionState = OpenRouterConnectionState.NeedsAttention;
+            RenderOpenRouterState();
+            ShowError(ex.Message);
         }
         catch (Exception ex)
         {
@@ -399,7 +622,7 @@ public partial class MainPage : ContentPage
         }
     }
 
-    async Task TranslateResXAsync(DeepLClient client, string path)
+    async Task TranslateResXAsync(string apiKey, OpenRouterModel model, string path)
     {
         var values = ReadResXFile(path);
 
@@ -425,17 +648,23 @@ public partial class MainPage : ContentPage
 
             for (var offset = 0; offset < sourceTexts.Length; offset += BatchSize)
             {
-                var batch = sourceTexts.Skip(offset).Take(BatchSize).ToArray();
-                var results = await client.TranslateTextAsync(
-                    batch,
-                    LanguageCode.English,
-                    targetLanguage.DeepLCode);
+                var batch = sourceTexts
+                    .Skip(offset)
+                    .Take(BatchSize)
+                    .Select((text, index) => new OpenRouterTranslationInput(offset + index, text))
+                    .ToArray();
+                var result = await _openRouterClient.TranslateAsync(
+                    apiKey,
+                    model.Id,
+                    $"{targetLanguage.DisplayName} ({targetLanguage.ColumnHeader})",
+                    batch);
 
-                for (var index = 0; index < results.Length; index++)
+                foreach (var translation in result.Translations)
                 {
-                    translatedValues[keys[offset + index]] = results[index].Text;
+                    translatedValues[keys[translation.Key]] = translation.Value;
                 }
 
+                _translationUsage += result.Usage;
                 completedSteps += batch.Length;
                 UpdateProgress(
                     completedSteps,
@@ -451,8 +680,7 @@ public partial class MainPage : ContentPage
             writtenFiles.Add(outputPath);
         }
 
-        var usageSummary = await GetUsageSummaryAsync(client);
-        ShowUsage(usageSummary);
+        ShowUsage(BuildUsageSummary(model));
         ShowSuccess(
             writtenFiles.Count == 1
                 ? "Translated into 1 language"
@@ -461,7 +689,7 @@ public partial class MainPage : ContentPage
             writtenFiles);
     }
 
-    async Task TranslateSpreadsheetAsync(DeepLClient client, string path)
+    async Task TranslateSpreadsheetAsync(string apiKey, OpenRouterModel model, string path)
     {
         var document = _translationDocument
             ?? throw new InvalidOperationException("Please select the spreadsheet again.");
@@ -500,16 +728,21 @@ public partial class MainPage : ContentPage
             for (var offset = 0; offset < sourceRows.Count; offset += BatchSize)
             {
                 var batchRows = sourceRows.Skip(offset).Take(BatchSize).ToArray();
-                var results = await client.TranslateTextAsync(
-                    batchRows.Select(row => row.Text).ToArray(),
-                    LanguageCode.English,
-                    targetLanguage.DeepLCode);
+                var batch = batchRows
+                    .Select(row => new OpenRouterTranslationInput(row.RowNumber, row.Text))
+                    .ToArray();
+                var result = await _openRouterClient.TranslateAsync(
+                    apiKey,
+                    model.Id,
+                    $"{targetLanguage.DisplayName} ({targetLanguage.ColumnHeader})",
+                    batch);
 
-                for (var index = 0; index < results.Length; index++)
+                foreach (var translation in result.Translations)
                 {
-                    translatedValues[batchRows[index].RowNumber] = results[index].Text;
+                    translatedValues[translation.Key] = translation.Value;
                 }
 
+                _translationUsage += result.Usage;
                 completedSteps += batchRows.Length;
                 UpdateProgress(
                     completedSteps,
@@ -525,8 +758,7 @@ public partial class MainPage : ContentPage
 
         await Task.Run(() => SaveDocument(document, outputPath, extension));
 
-        var usageSummary = await GetUsageSummaryAsync(client);
-        ShowUsage(usageSummary);
+        ShowUsage(BuildUsageSummary(model));
         RenderLanguageOptions();
         ShowSuccess(
             $"Added {string.Join(", ", languagesToTranslate.Select(language => language.ColumnHeader))}",
@@ -534,21 +766,9 @@ public partial class MainPage : ContentPage
             [outputPath]);
     }
 
-    static async Task<string> GetUsageSummaryAsync(DeepLClient client)
-    {
-        try
-        {
-            var usage = await client.GetUsageAsync();
-
-            return usage.Character is null
-                ? "DeepL character usage is unavailable."
-                : $"{usage.Character.Count:N0} of {usage.Character.Limit:N0} characters used this period";
-        }
-        catch (Exception)
-        {
-            return "DeepL character usage is unavailable.";
-        }
-    }
+    string BuildUsageSummary(OpenRouterModel model) =>
+        $"{model.Name}  ·  {_translationUsage.PromptTokens:N0} input  ·  " +
+        $"{_translationUsage.CompletionTokens:N0} output  ·  {_translationUsage.TotalTokens:N0} total tokens";
 
     // ------------------------------------------------------------------ Export
 
@@ -632,9 +852,9 @@ public partial class MainPage : ContentPage
     {
         _isBusy = busy;
         PickFileButton.IsEnabled = !busy;
-        AuthKeyEntry.IsEnabled = !busy;
+        ManageAccountButton.IsEnabled = !busy;
+        ChooseModelButton.IsEnabled = !busy && !string.IsNullOrWhiteSpace(_apiKey);
         LanguageMenuButton.IsEnabled = !busy;
-        RevealKeyButton.IsEnabled = !busy;
         ProgressGroup.IsVisible = busy;
 
         if (busy)
@@ -650,14 +870,18 @@ public partial class MainPage : ContentPage
 
     /// <summary>
     /// Actions are enabled by what the app actually has, not merely by whether a
-    /// job is running: Translate needs both a file and a key.
+    /// job is running: Translate needs a file, usable account and available model.
     /// </summary>
     void UpdateActionState()
     {
         var hasFile = _selectedFilePath is not null;
-        var hasKey = !string.IsNullOrWhiteSpace(AuthKeyEntry.Text);
+        var hasUsableKey = !string.IsNullOrWhiteSpace(_apiKey) &&
+            _connectionState is OpenRouterConnectionState.Connected or OpenRouterConnectionState.Unverified;
+        var hasModel = _selectedModel is not null && !_selectedModelUnavailable;
 
-        TranslateButton.IsEnabled = !_isBusy && hasFile && hasKey;
+        ManageAccountButton.IsEnabled = !_isBusy;
+        ChooseModelButton.IsEnabled = !_isBusy && hasUsableKey;
+        TranslateButton.IsEnabled = !_isBusy && hasFile && hasUsableKey && hasModel;
         ExportButton.IsEnabled = !_isBusy && hasFile;
         ExportCsvButton.IsEnabled = !_isBusy && hasFile;
     }
