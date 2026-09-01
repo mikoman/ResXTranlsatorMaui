@@ -395,4 +395,27 @@ FodyWeavers.xsd
 *.msp
 
 # JetBrains Rider
+.idea/
+.fleet/
+*.iml
+*.ipr
+*.iws
 *.sln.iml
+
+# macOS metadata
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100/
+.Trashes/
+
+# Windows Explorer metadata
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Xcode user and local build data
+xcuserdata/
+*.xcuserstate
+DerivedData/

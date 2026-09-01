@@ -1,19 +1,53 @@
 ﻿<?xml version="1.0" encoding="UTF-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-              xmlns:local="clr-namespace:ResXTranslator"
+             xmlns:local="clr-namespace:ResXTranslator"
              x:Class="ResXTranslator.MainPage"
-             WidthRequest="1280">
+             Title="ResXTranslator">
 
-    <StackLayout Margin="20">
-        <Picker x:Name="LanguagePicker" Grid.Column="0" VerticalOptions="Center" HorizontalOptions="Center"
-                    SelectedItem="{Binding SelectedLanguage}"/>
-        <Button Text="Select ResX File" Clicked="OnFilePickerButtonClicked"/>
-        <Button Text="Translate" Clicked="OnTranslateButtonClicked"/>
-        <Label x:Name="StatusLabel" Text="Status"/>
-        <ProgressBar x:Name="translationProgressBar" Progress="0" />
-        <Button Text="Export to Excel" Clicked="SaveToExcelButtonClicked"/>
+    <ScrollView>
+        <VerticalStackLayout Margin="20"
+                             Spacing="12"
+                             MaximumWidthRequest="900"
+                             HorizontalOptions="Fill">
 
-    </StackLayout>
+            <Label Text="DeepL API key" FontAttributes="Bold" />
+            <Entry x:Name="AuthKeyEntry"
+                   Placeholder="Paste your DeepL API key (stored locally)"
+                   IsPassword="True"
+                   Completed="OnAuthKeyCompleted"
+                   Unfocused="OnAuthKeyUnfocused" />
+
+            <Label Text="Target language (leave empty to translate all missing languages)" FontAttributes="Bold" />
+            <Picker x:Name="LanguagePicker"
+                    Title="All languages"
+                    HorizontalOptions="Fill" />
+
+            <Button x:Name="PickFileButton"
+                    Text="Select RESX, Excel, or CSV File"
+                    Clicked="OnFilePickerButtonClicked" />
+
+            <Label x:Name="SelectedFileLabel"
+                   Text="No file selected."
+                   LineBreakMode="MiddleTruncation" />
+
+            <Button x:Name="TranslateButton"
+                    Text="Translate"
+                    Clicked="OnTranslateButtonClicked" />
+
+            <Button x:Name="ExportButton"
+                    Text="Export to Excel (.xlsx)"
+                    Clicked="OnSaveToExcelButtonClicked" />
+
+            <Button x:Name="ExportCsvButton"
+                    Text="Export to CSV"
+                    Clicked="OnSaveToCsvButtonClicked" />
+
+            <ProgressBar x:Name="translationProgressBar" Progress="0" />
+
+            <Label x:Name="StatusLabel" Text="Ready." LineBreakMode="WordWrap" />
+
+        </VerticalStackLayout>
+    </ScrollView>
 
 </ContentPage>
