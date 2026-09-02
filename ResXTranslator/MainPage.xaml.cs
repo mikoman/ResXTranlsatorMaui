@@ -8,19 +8,22 @@ public partial class MainPage : ContentPage
     const int BatchSize = 40;
     const int MaxBatchCharacters = 10_000;
 
-    readonly OpenRouterClient _openRouterClient = new();
+    readonly LlmClient _llmClient;
+    readonly LlmProviderRegistry _providerRegistry;
     string? _selectedFilePath;
     PickedFolder? _pickedFolder;
     IReadOnlyList<string> _folderResxFiles = [];
     TranslationSpreadsheetDocument? _translationDocument;
     TargetLanguageOption? _selectedLanguage;
+    LlmProviderDescriptor _provider;
+    Uri _endpoint;
     string? _apiKey;
-    IReadOnlyList<OpenRouterModel> _models = [];
-    OpenRouterModel? _selectedModel;
-    string _domainInstructions = OpenRouterSettings.DefaultDomainInstructions;
-    int _paidModelConcurrency = OpenRouterSettings.DefaultPaidConcurrency;
-    OpenRouterConnectionState _connectionState = OpenRouterConnectionState.NotConnected;
-    OpenRouterTokenUsage _translationUsage;
+    IReadOnlyList<LlmModel> _models = [];
+    LlmModel? _selectedModel;
+    string _domainInstructions = LlmSettings.DefaultDomainInstructions;
+    int _providerConcurrency;
+    LlmConnectionState _connectionState = LlmConnectionState.NotConnected;
+    LlmTokenUsage _translationUsage;
     bool _catalogLoadedSuccessfully;
     bool _selectedModelUnavailable;
     bool _initialized;
@@ -34,14 +37,24 @@ public partial class MainPage : ContentPage
     string _progressMessage = "Preparing source";
     string _progressDetail = "Inspecting the selected input";
 
-    public MainPage()
+    internal MainPage(LlmClient llmClient, LlmProviderRegistry providerRegistry)
     {
+        _llmClient = llmClient;
+        _providerRegistry = providerRegistry;
+        var providerId = LlmSettings.ActiveProvider;
+        _provider = providerRegistry.Get(providerId).Descriptor;
+        if (!_provider.IsAvailable)
+        {
+            _provider = providerRegistry.Get(LlmProviderId.OpenRouter).Descriptor;
+            LlmSettings.ActiveProvider = _provider.Id;
+        }
+
+        _endpoint = LoadEndpoint(_provider);
         InitializeComponent();
-        RestoreSelectedModel();
-        RestoreTranslationSettings();
+        RestoreProviderSettings();
         RenderLanguageState();
         RenderSourceRow();
-        RenderOpenRouterState();
+        RenderProviderState();
         RenderTranslationSettings();
         UpdateActionState();
 
@@ -53,7 +66,7 @@ public partial class MainPage : ContentPage
     public void WriteResXFile(string path, Dictionary<string, string> values) =>
         new ResXParser().WriteResXFile(path, values);
 
-    // ------------------------------------------------------------- OpenRouter
+    // ------------------------------------------------------------ LLM provider
 
     async void OnLoaded(object? sender, EventArgs e)
     {
@@ -65,60 +78,82 @@ public partial class MainPage : ContentPage
         }
 
         _initialized = true;
-        await InitializeOpenRouterAsync();
+        await InitializeProviderAsync();
     }
 
-    void RestoreSelectedModel()
+    void RestoreProviderSettings()
     {
-        var savedId = Preferences.Default.Get(OpenRouterSettings.ModelPreferenceKey, string.Empty);
-
+        _endpoint = LoadEndpoint(_provider);
+        var savedId = LlmSettings.LoadModelId(_provider.Id);
         if (!string.IsNullOrWhiteSpace(savedId))
         {
-            _selectedModel = new OpenRouterModel(savedId, savedId, null, null);
+            _selectedModel = new LlmModel(savedId, savedId, null, null) { Provider = _provider.Name };
         }
+        else
+        {
+            _selectedModel = null;
+        }
+
+        _domainInstructions = LlmSettings.LoadDomainInstructions();
+        _providerConcurrency = LlmSettings.LoadConcurrency(_provider);
+        _selectedModelUnavailable = false;
+        _catalogLoadedSuccessfully = false;
     }
 
-    void RestoreTranslationSettings()
+    static Uri LoadEndpoint(LlmProviderDescriptor provider)
     {
-        _domainInstructions = OpenRouterSettings.LoadDomainInstructions();
-        _paidModelConcurrency = OpenRouterSettings.LoadPaidConcurrency();
+        var saved = LlmSettings.LoadEndpoint(provider);
+        return LlmProviderRegistry.TryCreateEndpoint(provider, saved, out var endpoint, out _)
+            ? endpoint!
+            : new Uri(provider.DefaultEndpoint);
     }
 
-    async Task InitializeOpenRouterAsync()
+    LlmConnectionProfile CurrentProfile() =>
+        new(_provider.Id, _endpoint, _apiKey, _providerConcurrency);
+
+    bool HasConnectionConfiguration =>
+        (!_provider.RequiresApiKey || !string.IsNullOrWhiteSpace(_apiKey)) &&
+        _connectionState is LlmConnectionState.Connected or LlmConnectionState.Unverified;
+
+    bool IsSelectedModelVerified => _selectedModel is not null &&
+        LlmSettings.IsModelCompatibilityVerified(_provider.Id, _endpoint, _selectedModel.Id);
+
+    async Task InitializeProviderAsync()
     {
         try
         {
-            _apiKey = await OpenRouterCredentialStore.GetAsync();
+            _apiKey = await LlmCredentialStore.GetAsync(_provider.Id);
         }
         catch (Exception ex)
         {
-            _connectionState = OpenRouterConnectionState.NeedsAttention;
-            RenderOpenRouterState();
+            _connectionState = LlmConnectionState.NeedsAttention;
+            RenderProviderState();
             UpdateActionState();
-            ShowError($"The saved OpenRouter key could not be read from secure storage: {ex.Message}");
+            ShowError($"The saved {_provider.Name} credential could not be read from secure storage: {ex.Message}");
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_apiKey))
+        if (_provider.RequiresApiKey && string.IsNullOrWhiteSpace(_apiKey))
         {
-            _connectionState = OpenRouterConnectionState.NotConnected;
-            RenderOpenRouterState();
+            _connectionState = LlmConnectionState.NotConnected;
+            RenderProviderState();
             UpdateActionState();
             return;
         }
 
-        _connectionState = OpenRouterConnectionState.Checking;
-        RenderOpenRouterState();
+        _connectionState = LlmConnectionState.Checking;
+        RenderProviderState();
         UpdateActionState();
 
         try
         {
-            await _openRouterClient.ValidateApiKeyAsync(_apiKey);
+            await _llmClient.ValidateConnectionAsync(CurrentProfile());
         }
-        catch (OpenRouterApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        catch (LlmApiException ex) when (ex.StatusCode is
+            System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
         {
-            _connectionState = OpenRouterConnectionState.NeedsAttention;
-            RenderOpenRouterState();
+            _connectionState = LlmConnectionState.NeedsAttention;
+            RenderProviderState();
             UpdateActionState();
             return;
         }
@@ -126,13 +161,13 @@ public partial class MainPage : ContentPage
         {
             // A network or service failure does not prove a stored credential is
             // invalid. Keep it usable so the translation request can try later.
-            _connectionState = OpenRouterConnectionState.Unverified;
-            RenderOpenRouterState();
+            _connectionState = LlmConnectionState.Unverified;
+            RenderProviderState();
             UpdateActionState();
             return;
         }
 
-        _connectionState = OpenRouterConnectionState.Connected;
+        _connectionState = LlmConnectionState.Connected;
 
         try
         {
@@ -144,20 +179,20 @@ public partial class MainPage : ContentPage
             // the connected state and let the model sheet offer refresh/retry.
         }
 
-        RenderOpenRouterState();
+        RenderProviderState();
         UpdateActionState();
     }
 
     async Task RefreshModelsAsync()
     {
-        if (string.IsNullOrWhiteSpace(_apiKey))
+        if (_provider.RequiresApiKey && string.IsNullOrWhiteSpace(_apiKey))
         {
             return;
         }
 
         try
         {
-            _models = await _openRouterClient.GetModelsAsync(_apiKey);
+            _models = await _llmClient.GetModelsAsync(CurrentProfile());
             _catalogLoadedSuccessfully = true;
             ResolveSelectedModel();
         }
@@ -171,7 +206,7 @@ public partial class MainPage : ContentPage
 
     void ResolveSelectedModel()
     {
-        var savedId = Preferences.Default.Get(OpenRouterSettings.ModelPreferenceKey, string.Empty);
+        var savedId = LlmSettings.LoadModelId(_provider.Id);
 
         if (string.IsNullOrWhiteSpace(savedId))
         {
@@ -181,9 +216,37 @@ public partial class MainPage : ContentPage
         }
 
         _selectedModel = _models.FirstOrDefault(model => model.Id == savedId)
-            ?? new OpenRouterModel(savedId, savedId, null, null);
+            ?? new LlmModel(savedId, savedId, null, null) { Provider = _provider.Name };
         _selectedModelUnavailable = _catalogLoadedSuccessfully &&
-            !_models.Any(model => model.Id == savedId);
+            !_models.Any(model => model.Id == savedId) &&
+            !LlmSettings.IsModelCompatibilityVerified(_provider.Id, _endpoint, savedId);
+    }
+
+    async void OnChooseProviderClicked(object? sender, EventArgs e)
+    {
+        if (_isBusy)
+        {
+            return;
+        }
+
+        var page = new LlmProviderPage(_providerRegistry.Providers, _provider.Id);
+        await Navigation.PushModalAsync(page);
+        var providerId = await page.Completion;
+        if (providerId is null || providerId == _provider.Id)
+        {
+            return;
+        }
+
+        _provider = _providerRegistry.Get(providerId.Value).Descriptor;
+        LlmSettings.ActiveProvider = providerId.Value;
+        _apiKey = null;
+        _models = [];
+        _connectionState = LlmConnectionState.NotConnected;
+        RestoreProviderSettings();
+        RenderTranslationSettings();
+        RenderProviderState();
+        UpdateActionState();
+        await InitializeProviderAsync();
     }
 
     async void OnManageAccountClicked(object? sender, EventArgs e)
@@ -193,18 +256,22 @@ public partial class MainPage : ContentPage
             return;
         }
 
-        var page = new OpenRouterConnectionPage(
-            _openRouterClient,
-            !string.IsNullOrWhiteSpace(_apiKey),
+        var page = new LlmConnectionPage(
+            _llmClient,
+            _provider,
+            _endpoint,
+            _apiKey,
+            _providerConcurrency,
             _connectionState);
         await Navigation.PushModalAsync(page);
         var result = await page.Completion;
 
         switch (result.Outcome)
         {
-            case OpenRouterConnectionOutcome.Connected when !string.IsNullOrWhiteSpace(result.ApiKey):
+            case LlmConnectionOutcome.Connected:
+                _endpoint = result.Endpoint ?? _endpoint;
                 _apiKey = result.ApiKey;
-                _connectionState = OpenRouterConnectionState.Connected;
+                _connectionState = LlmConnectionState.Connected;
 
                 try
                 {
@@ -216,32 +283,33 @@ public partial class MainPage : ContentPage
                 }
 
                 break;
-            case OpenRouterConnectionOutcome.Removed:
+            case LlmConnectionOutcome.Removed:
                 _apiKey = null;
+                _endpoint = LoadEndpoint(_provider);
                 _models = [];
                 _catalogLoadedSuccessfully = false;
                 _selectedModelUnavailable = false;
-                _connectionState = OpenRouterConnectionState.NotConnected;
+                _connectionState = LlmConnectionState.NotConnected;
                 break;
         }
 
-        RenderOpenRouterState();
+        RenderProviderState();
         UpdateActionState();
     }
 
     async void OnChooseModelClicked(object? sender, EventArgs e)
     {
-        if (_isBusy || string.IsNullOrWhiteSpace(_apiKey))
+        if (_isBusy || !HasConnectionConfiguration)
         {
             return;
         }
 
-        var page = new OpenRouterModelPage(
-            _openRouterClient,
-            _apiKey,
+        var page = new LlmModelPage(
+            _llmClient,
+            _provider,
+            CurrentProfile(),
             _models,
-            _selectedModel?.Id,
-            _paidModelConcurrency);
+            _selectedModel?.Id);
         await Navigation.PushModalAsync(page);
         var model = await page.Completion;
 
@@ -252,8 +320,9 @@ public partial class MainPage : ContentPage
 
         _selectedModel = model;
         _selectedModelUnavailable = false;
-        Preferences.Default.Set(OpenRouterSettings.ModelPreferenceKey, model.Id);
-        RenderOpenRouterState();
+        LlmSettings.SaveModelId(_provider.Id, model.Id);
+        LlmSettings.SaveModelCompatibility(_provider.Id, _endpoint, model.Id);
+        RenderProviderState();
         UpdateActionState();
     }
 
@@ -264,14 +333,15 @@ public partial class MainPage : ContentPage
             return;
         }
 
-        var hasUsableKey = !string.IsNullOrWhiteSpace(_apiKey) &&
-            _connectionState is OpenRouterConnectionState.Connected or OpenRouterConnectionState.Unverified;
-        var generatorModel = hasUsableKey && !_selectedModelUnavailable ? _selectedModel : null;
+        var generatorModel = HasConnectionConfiguration && !_selectedModelUnavailable && IsSelectedModelVerified
+            ? _selectedModel
+            : null;
         var page = new TranslationSettingsPage(
-            _openRouterClient,
+            _llmClient,
+            _provider,
             _domainInstructions,
-            _paidModelConcurrency,
-            hasUsableKey ? _apiKey : null,
+            _providerConcurrency,
+            generatorModel is null ? null : CurrentProfile(),
             generatorModel);
         await Navigation.PushModalAsync(page);
         var result = await page.Completion;
@@ -281,8 +351,10 @@ public partial class MainPage : ContentPage
             return;
         }
 
-        OpenRouterSettings.Save(result.DomainInstructions, result.PaidModelConcurrency);
-        RestoreTranslationSettings();
+        LlmSettings.SaveDomainInstructions(result.DomainInstructions);
+        LlmSettings.SaveConcurrency(_provider, result.Concurrency);
+        _domainInstructions = LlmSettings.LoadDomainInstructions();
+        _providerConcurrency = LlmSettings.LoadConcurrency(_provider);
         RenderTranslationSettings();
     }
 
@@ -290,27 +362,27 @@ public partial class MainPage : ContentPage
     {
         var domain = string.Equals(
             _domainInstructions,
-            OpenRouterSettings.DefaultDomainInstructions,
+            LlmSettings.DefaultDomainInstructions,
             StringComparison.Ordinal)
                 ? "Default domain"
                 : "Custom domain";
-        SettingsSummaryLabel.Text = $"{domain} · {_paidModelConcurrency:N0} paid max";
+        SettingsSummaryLabel.Text = $"{domain} · {_providerConcurrency:N0} max";
         SemanticProperties.SetDescription(
             SettingsSummaryLabel,
-            $"{domain}. Maximum {_paidModelConcurrency:N0} concurrent requests for paid models.");
+            $"{domain}. Maximum {_providerConcurrency:N0} concurrent {_provider.Name} requests.");
     }
 
-    void RenderOpenRouterState()
+    void RenderProviderState()
     {
         var (symbol, lightColor, darkColor, status) = _connectionState switch
         {
-            OpenRouterConnectionState.Checking =>
+            LlmConnectionState.Checking =>
                 ("arrow.triangle.2.circlepath", "SecondaryLabelLight", "SecondaryLabelDark", "Checking…"),
-            OpenRouterConnectionState.Connected =>
+            LlmConnectionState.Connected =>
                 ("checkmark.circle.fill", "SuccessLight", "SuccessDark", "Connected"),
-            OpenRouterConnectionState.Unverified =>
+            LlmConnectionState.Unverified =>
                 ("wifi.exclamationmark", "WarningLight", "WarningDark", "Couldn't verify"),
-            OpenRouterConnectionState.NeedsAttention =>
+            LlmConnectionState.NeedsAttention =>
                 ("exclamationmark.triangle.fill", "DangerLight", "DangerDark", "Needs attention"),
             _ => ("key.fill", "SecondaryLabelLight", "SecondaryLabelDark", "Not connected")
         };
@@ -321,8 +393,9 @@ public partial class MainPage : ContentPage
             Resource<Color>(lightColor),
             Resource<Color>(darkColor));
         AccountStatusLabel.Text = status;
+        ProviderNameLabel.Text = _provider.Name;
 
-        if (string.IsNullOrWhiteSpace(_apiKey))
+        if (!HasConnectionConfiguration)
         {
             ModelNameLabel.Text = "Connect first";
             ModelIdLabel.IsVisible = false;
@@ -336,8 +409,12 @@ public partial class MainPage : ContentPage
         {
             ModelNameLabel.Text = _selectedModelUnavailable
                 ? "Model unavailable"
-                : _selectedModel.Name;
-            ModelIdLabel.Text = _selectedModel.Id;
+                : IsSelectedModelVerified
+                    ? _selectedModel.Name
+                    : "Model test required";
+            ModelIdLabel.Text = IsSelectedModelVerified
+                ? _selectedModel.Id
+                : $"{_selectedModel.Id} · strict schema not verified";
             ModelIdLabel.IsVisible = true;
         }
     }
@@ -729,30 +806,40 @@ public partial class MainPage : ContentPage
 
         try
         {
-            var apiKey = _apiKey ?? throw new InvalidOperationException("Connect an OpenRouter account first.");
-            var model = _selectedModel ?? throw new InvalidOperationException("Choose an OpenRouter model first.");
+            if (!HasConnectionConfiguration)
+            {
+                throw new InvalidOperationException($"Connect {_provider.Name} first.");
+            }
+
+            var profile = CurrentProfile();
+            var model = _selectedModel ?? throw new InvalidOperationException($"Choose a {_provider.Name} model first.");
 
             if (_selectedModelUnavailable)
             {
-                throw new InvalidOperationException("The selected OpenRouter model is unavailable. Choose another model.");
+                throw new InvalidOperationException($"The selected {_provider.Name} model is unavailable. Choose another model.");
             }
 
-            var runSettings = new TranslationExecutionSettings(
+            if (!IsSelectedModelVerified)
+            {
+                throw new InvalidOperationException("Test the selected model for strict JSON Schema compatibility before translating.");
+            }
+
+            var runSettings = new LlmTranslationExecutionSettings(
                 _domainInstructions,
-                OpenRouterSettings.GetParallelRequestLimit(model, _paidModelConcurrency));
+                LlmSettings.GetParallelRequestLimit(_provider, model, _providerConcurrency));
             _translationUsage = default;
 
             if (_pickedFolder is not null)
             {
-                await TranslateResXFolderAsync(apiKey, model, runSettings, cancellationToken);
+                await TranslateResXFolderAsync(profile, model, runSettings, cancellationToken);
             }
             else if (_selectedFilePath is { } path && IsResX(path))
             {
-                await TranslateResXAsync(apiKey, model, runSettings, path, cancellationToken);
+                await TranslateResXAsync(profile, model, runSettings, path, cancellationToken);
             }
             else if (_selectedFilePath is { } spreadsheetPath)
             {
-                await TranslateSpreadsheetAsync(apiKey, model, runSettings, spreadsheetPath, cancellationToken);
+                await TranslateSpreadsheetAsync(profile, model, runSettings, spreadsheetPath, cancellationToken);
             }
             else
             {
@@ -777,17 +864,18 @@ public partial class MainPage : ContentPage
                 Environment.NewLine + $"Stopped after {FormatRunDuration(_progressStopwatch.Elapsed)}.",
                 []);
         }
-        catch (OpenRouterApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        catch (LlmApiException ex) when (ex.StatusCode is
+            System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
         {
             AppDiagnostics.WriteException(
                 "Translation",
                 $"Run {runId} failed after {FormatRunDuration(_progressStopwatch.Elapsed)}",
                 ex);
-            _connectionState = OpenRouterConnectionState.NeedsAttention;
-            RenderOpenRouterState();
+            _connectionState = LlmConnectionState.NeedsAttention;
+            RenderProviderState();
             ShowTranslationError(ex.Message);
         }
-        catch (OpenRouterApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (LlmApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             AppDiagnostics.WriteException(
                 "Translation",
@@ -801,14 +889,14 @@ public partial class MainPage : ContentPage
             catch (Exception catalogException)
             {
                 AppDiagnostics.WriteException(
-                    "OpenRouter",
-                    "Could not refresh the model catalog after a routing 404",
+                    _provider.Name,
+                    "Could not refresh the model catalog after a model or endpoint 404",
                     catalogException);
             }
 
-            RenderOpenRouterState();
+            RenderProviderState();
             ShowTranslationError(_selectedModelUnavailable
-                ? "The selected OpenRouter model is no longer available. Choose another model."
+                ? $"The selected {_provider.Name} model is no longer available. Choose another model."
                 : ex.Message);
         }
         catch (Exception ex)
@@ -837,7 +925,7 @@ public partial class MainPage : ContentPage
         CancelTranslationButton.IsEnabled = false;
         SetProgressState(
             _progressMessage,
-            "Cancelling the active OpenRouter request…");
+            $"Cancelling the active {_provider.Name} request…");
         AppDiagnostics.Write("Translation", "Cancellation requested by user");
         cancellation.Cancel();
     }
@@ -870,9 +958,9 @@ public partial class MainPage : ContentPage
     }
 
     async Task TranslateResXAsync(
-        string apiKey,
-        OpenRouterModel model,
-        TranslationExecutionSettings runSettings,
+        LlmConnectionProfile profile,
+        LlmModel model,
+        LlmTranslationExecutionSettings runSettings,
         string path,
         CancellationToken cancellationToken)
     {
@@ -886,7 +974,7 @@ public partial class MainPage : ContentPage
         var workItem = new ResXWorkItem(path, values);
         var progress = new TranslationProgress(values.Count);
         var writtenFiles = await TranslateResXWorkItemsAsync(
-            apiKey,
+            profile,
             model,
             runSettings,
             [workItem],
@@ -902,9 +990,9 @@ public partial class MainPage : ContentPage
     }
 
     async Task TranslateResXFolderAsync(
-        string apiKey,
-        OpenRouterModel model,
-        TranslationExecutionSettings runSettings,
+        LlmConnectionProfile profile,
+        LlmModel model,
+        LlmTranslationExecutionSettings runSettings,
         CancellationToken cancellationToken)
     {
         if (_folderResxFiles.Count == 0)
@@ -926,7 +1014,7 @@ public partial class MainPage : ContentPage
         var totalEntries = translatableItems.Sum(item => item.Values.Count);
         var progress = new TranslationProgress(totalEntries);
         var writtenFiles = await TranslateResXWorkItemsAsync(
-            apiKey,
+            profile,
             model,
             runSettings,
             translatableItems,
@@ -947,9 +1035,9 @@ public partial class MainPage : ContentPage
     }
 
     async Task<IReadOnlyList<string>> TranslateResXWorkItemsAsync(
-        string apiKey,
-        OpenRouterModel model,
-        TranslationExecutionSettings runSettings,
+        LlmConnectionProfile profile,
+        LlmModel model,
+        LlmTranslationExecutionSettings runSettings,
         IReadOnlyList<ResXWorkItem> items,
         TargetLanguageOption targetLanguage,
         TranslationProgress progress,
@@ -980,7 +1068,7 @@ public partial class MainPage : ContentPage
         }
 
         await TranslateBatchQueueAsync(
-            apiKey,
+            profile,
             model,
             runSettings,
             targetLanguage,
@@ -1021,9 +1109,9 @@ public partial class MainPage : ContentPage
     }
 
     async Task TranslateSpreadsheetAsync(
-        string apiKey,
-        OpenRouterModel model,
-        TranslationExecutionSettings runSettings,
+        LlmConnectionProfile profile,
+        LlmModel model,
+        LlmTranslationExecutionSettings runSettings,
         string path,
         CancellationToken cancellationToken)
     {
@@ -1047,10 +1135,10 @@ public partial class MainPage : ContentPage
 
         var translatedValues = new Dictionary<int, string>(sourceRows.Count);
         var inputs = sourceRows
-            .Select(row => new OpenRouterTranslationInput(row.RowNumber, row.Text))
+            .Select(row => new LlmTranslationInput(row.RowNumber, row.Text))
             .ToArray();
         var batches = CreateTranslationBatches(inputs, input => input.Text);
-        var results = new OpenRouterTranslationBatch?[batches.Count];
+        var results = new LlmTranslationBatch?[batches.Count];
         var workQueue = new List<TranslationBatchWork>(batches.Count);
 
         for (var batchIndex = 0; batchIndex < batches.Count; batchIndex++)
@@ -1068,7 +1156,7 @@ public partial class MainPage : ContentPage
 
         var progress = new TranslationProgress(sourceRows.Count);
         await TranslateBatchQueueAsync(
-            apiKey,
+            profile,
             model,
             runSettings,
             selectedLanguage,
@@ -1108,7 +1196,7 @@ public partial class MainPage : ContentPage
     {
         var keys = item.Values.Keys.ToArray();
         var inputs = item.Values.Values
-            .Select((text, id) => new OpenRouterTranslationInput(id, text))
+            .Select((text, id) => new LlmTranslationInput(id, text))
             .ToArray();
         var batches = CreateTranslationBatches(inputs, input => input.Text);
         var outputDirectory = fileCount == 1
@@ -1126,9 +1214,9 @@ public partial class MainPage : ContentPage
     }
 
     async Task TranslateBatchQueueAsync(
-        string apiKey,
-        OpenRouterModel model,
-        TranslationExecutionSettings runSettings,
+        LlmConnectionProfile profile,
+        LlmModel model,
+        LlmTranslationExecutionSettings runSettings,
         TargetLanguageOption targetLanguage,
         IReadOnlyList<TranslationBatchWork> workQueue,
         TranslationProgress progress,
@@ -1173,8 +1261,8 @@ public partial class MainPage : ContentPage
                         $"Starting queue item {workIndex + 1}/{workQueue.Count} | file={work.DisplayName} | fileIndex={work.FileIndex}/{work.FileCount} | language={targetLanguage.ColumnHeader} | batch={work.BatchNumber}/{work.BatchCount} | entries={work.Inputs.Length} | sourceChars={batchCharacters}");
 
                     var requestProgress = CreateRequestProgress(work);
-                    var result = await _openRouterClient.TranslateAsync(
-                        apiKey,
+                    var result = await _llmClient.TranslateAsync(
+                        profile,
                         model,
                         targetLanguage.ModelTarget,
                         runSettings.DomainInstructions,
@@ -1237,14 +1325,14 @@ public partial class MainPage : ContentPage
         _activeConcurrency = 0;
     }
 
-    static string GetPricingClass(OpenRouterModel model) => model switch
+    static string GetPricingClass(LlmModel model) => model switch
     {
         { IsDefinitelyPaid: true } => "paid",
         { IsDefinitelyFree: true } => "free",
         _ => "unknown-conservative"
     };
 
-    string BuildUsageSummary(OpenRouterModel model, int parallelRequestLimit)
+    string BuildUsageSummary(LlmModel model, int parallelRequestLimit)
     {
         var reasoning = _translationUsage.ReasoningTokens > 0
             ? $"  ·  {_translationUsage.ReasoningTokens:N0} reasoning excluded"
@@ -1338,7 +1426,8 @@ public partial class MainPage : ContentPage
         PickFileButton.IsEnabled = !busy;
         PickFolderButton.IsEnabled = !busy;
         ManageAccountButton.IsEnabled = !busy;
-        ChooseModelButton.IsEnabled = !busy && !string.IsNullOrWhiteSpace(_apiKey);
+        ChooseModelButton.IsEnabled = !busy && HasConnectionConfiguration;
+        ChooseProviderButton.IsEnabled = !busy;
         ChooseLanguageButton.IsEnabled = !busy;
         EditSettingsButton.IsEnabled = !busy;
         ProgressGroup.IsVisible = busy;
@@ -1381,18 +1470,19 @@ public partial class MainPage : ContentPage
     void UpdateActionState()
     {
         var hasSource = _selectedFilePath is not null || _folderResxFiles.Count > 0;
-        var hasUsableKey = !string.IsNullOrWhiteSpace(_apiKey) &&
-            _connectionState is OpenRouterConnectionState.Connected or OpenRouterConnectionState.Unverified;
+        var hasUsableConnection = HasConnectionConfiguration;
         var hasModel = _selectedModel is not null && !_selectedModelUnavailable;
         var hasLanguage = _selectedLanguage is not null &&
             _translationDocument?.HasLanguage(_selectedLanguage.ColumnHeader) != true;
         var hasSingleFile = _selectedFilePath is not null;
 
         ManageAccountButton.IsEnabled = !_isBusy;
-        ChooseModelButton.IsEnabled = !_isBusy && hasUsableKey;
+        ChooseProviderButton.IsEnabled = !_isBusy;
+        ChooseModelButton.IsEnabled = !_isBusy && hasUsableConnection;
         ChooseLanguageButton.IsEnabled = !_isBusy;
         EditSettingsButton.IsEnabled = !_isBusy;
-        TranslateButton.IsEnabled = !_isBusy && hasSource && hasUsableKey && hasModel && hasLanguage;
+        TranslateButton.IsEnabled = !_isBusy && hasSource && hasUsableConnection &&
+            hasModel && IsSelectedModelVerified && hasLanguage;
         ExportButton.IsEnabled = !_isBusy && hasSingleFile;
         ExportCsvButton.IsEnabled = !_isBusy && hasSingleFile;
     }
@@ -1424,10 +1514,10 @@ public partial class MainPage : ContentPage
             $"{_progressMessage}. {ProgressDetailLabel.Text}");
     }
 
-    IProgress<OpenRouterTranslationProgress> CreateRequestProgress(TranslationBatchWork work) =>
-        new Progress<OpenRouterTranslationProgress>(request =>
+    IProgress<LlmTranslationProgress> CreateRequestProgress(TranslationBatchWork work) =>
+        new Progress<LlmTranslationProgress>(request =>
         {
-            if (request.Stage is OpenRouterTranslationStage.Completed or OpenRouterTranslationStage.Failed)
+            if (request.Stage is LlmTranslationStage.Completed or LlmTranslationStage.Failed)
             {
                 _activeRequests.Remove(request.RequestId);
             }
@@ -1464,8 +1554,8 @@ public partial class MainPage : ContentPage
         {
             0 when progress.CompletedBatches >= progress.TotalBatches => "All batches validated",
             0 => $"Starting up to {_activeConcurrency:N0} parallel requests",
-            1 => "1 OpenRouter request active",
-            _ => $"{activeCount:N0} OpenRouter requests active"
+            1 => $"1 {_provider.Name} request active",
+            _ => $"{activeCount:N0} {_provider.Name} requests active"
         };
 
         var batchPercent = progress.TotalBatches <= 0
@@ -1503,14 +1593,14 @@ public partial class MainPage : ContentPage
         RenderProgressMessage();
     }
 
-    static string GetRequestPhase(OpenRouterTranslationProgress request) => request.Stage switch
+    static string GetRequestPhase(LlmTranslationProgress request) => request.Stage switch
     {
-        OpenRouterTranslationStage.Sending => "sending",
-        OpenRouterTranslationStage.WaitingForResponse => "awaiting provider",
-        OpenRouterTranslationStage.ProviderConnected => "awaiting first data",
-        OpenRouterTranslationStage.ReceivingResponse => $"receiving {request.ResponseCharacters:N0} chars",
-        OpenRouterTranslationStage.ValidatingResponse => $"validating {request.ResponseCharacters:N0} chars",
-        OpenRouterTranslationStage.Retrying => "selecting a different provider",
+        LlmTranslationStage.Sending => "sending",
+        LlmTranslationStage.WaitingForResponse => "awaiting provider",
+        LlmTranslationStage.ProviderConnected => "awaiting first data",
+        LlmTranslationStage.ReceivingResponse => $"receiving {request.ResponseCharacters:N0} chars",
+        LlmTranslationStage.ValidatingResponse => $"validating {request.ResponseCharacters:N0} chars",
+        LlmTranslationStage.Retrying => "selecting a different provider",
         _ => "working"
     };
 
@@ -1797,7 +1887,7 @@ public partial class MainPage : ContentPage
     sealed class ResXTranslationPlan(
         ResXWorkItem item,
         string[] keys,
-        IReadOnlyList<OpenRouterTranslationInput[]> batches,
+        IReadOnlyList<LlmTranslationInput[]> batches,
         string outputDirectory,
         int fileIndex,
         int fileCount)
@@ -1806,9 +1896,9 @@ public partial class MainPage : ContentPage
 
         public string[] Keys { get; } = keys;
 
-        public IReadOnlyList<OpenRouterTranslationInput[]> Batches { get; } = batches;
+        public IReadOnlyList<LlmTranslationInput[]> Batches { get; } = batches;
 
-        public OpenRouterTranslationBatch?[] Results { get; } = new OpenRouterTranslationBatch?[batches.Count];
+        public LlmTranslationBatch?[] Results { get; } = new LlmTranslationBatch?[batches.Count];
 
         public string OutputDirectory { get; } = outputDirectory;
 
@@ -1825,8 +1915,8 @@ public partial class MainPage : ContentPage
         int fileCount,
         int batchNumber,
         int batchCount,
-        OpenRouterTranslationInput[] inputs,
-        Action<OpenRouterTranslationBatch> storeResult)
+        LlmTranslationInput[] inputs,
+        Action<LlmTranslationBatch> storeResult)
     {
         public string DisplayName { get; } = displayName;
 
@@ -1842,9 +1932,9 @@ public partial class MainPage : ContentPage
 
         public int BatchCount { get; } = batchCount;
 
-        public OpenRouterTranslationInput[] Inputs { get; } = inputs;
+        public LlmTranslationInput[] Inputs { get; } = inputs;
 
-        public Action<OpenRouterTranslationBatch> StoreResult { get; } = storeResult;
+        public Action<LlmTranslationBatch> StoreResult { get; } = storeResult;
 
         static string CompactName(string value) => value.Length <= 28
             ? value

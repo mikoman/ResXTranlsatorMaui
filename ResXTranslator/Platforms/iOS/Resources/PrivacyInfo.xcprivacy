@@ -36,7 +36,7 @@ More information: https://aka.ms/maui-privacy-manifest
                 <string>E174.1</string>
             </array>
         </dict>
-        <!-- Required because the app stores the selected OpenRouter model with Preferences. -->
+        <!-- Required because the app stores provider, endpoint, model, compatibility, and concurrency preferences. -->
         <dict>
             <key>NSPrivacyAccessedAPIType</key>
             <string>NSPrivacyAccessedAPICategoryUserDefaults</string>

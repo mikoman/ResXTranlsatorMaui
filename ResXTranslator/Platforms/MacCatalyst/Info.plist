@@ -2,6 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>ResXTranslator connects to local LLM servers such as Ollama and LM Studio on this Mac or private network.</string>
 	<!-- 6 = the Mac user interface idiom: no iPad downscaling (the interface was
 	     rendering at 0.769), and UIKit controls take on AppKit metrics and
 	     behaviour. Requires macOS 11+, satisfied by SupportedOSPlatformVersion 15.0.

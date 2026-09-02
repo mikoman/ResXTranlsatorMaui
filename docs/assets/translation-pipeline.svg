@@ -1,6 +1,6 @@
 <svg width="960" height="590" viewBox="0 0 960 590" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title description">
   <title id="title">ResXTranslator translation pipeline</title>
-  <desc id="description">Source RESX, CSV, or XLSX files are split into bounded batches, translated through an OpenRouter model, and strictly validated. Valid jobs write source-preserving output; failed jobs stop without writing current-job output.</desc>
+  <desc id="description">Source RESX, CSV, or XLSX files are split into bounded batches, translated through the selected LLM provider, and strictly validated. Valid jobs write source-preserving output; failed jobs stop without writing current-job output.</desc>
 
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
@@ -36,7 +36,7 @@
     <g>
       <rect x="670" y="50" width="250" height="138" rx="18" fill="#FFFFFF" stroke="#D9D0F7" stroke-width="2"/>
       <text x="694" y="88" fill="#512BD4" font-size="15" font-weight="700" letter-spacing="1.2">TRANSLATE</text>
-      <text x="694" y="124" fill="#242424" font-size="24" font-weight="700">OpenRouter model</text>
+      <text x="694" y="124" fill="#242424" font-size="24" font-weight="700">Selected LLM</text>
       <text x="694" y="157" fill="#636366" font-size="17">Streaming structured output</text>
     </g>
 

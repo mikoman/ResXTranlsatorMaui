@@ -2,13 +2,13 @@
 <controls:ModalSheetPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
                          xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
                          xmlns:controls="clr-namespace:ResXTranslator.Controls"
-                         x:Class="ResXTranslator.OpenRouterModelPage"
+                         x:Class="ResXTranslator.LlmModelPage"
                          x:ClassModifier="internal"
                          Title="Choose Model"
                          Shell.NavBarIsVisible="False">
 
     <Grid Padding="20,16,20,20"
-          RowDefinitions="Auto,Auto,Auto,*"
+          RowDefinitions="Auto,Auto,Auto,Auto,Auto,*"
           RowSpacing="12">
         <Grid ColumnDefinitions="Auto,*,Auto" MinimumHeightRequest="32">
             <controls:ActionButton Text="Cancel"
@@ -16,12 +16,14 @@
                                    Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
                                    FontSize="13"
                                    Clicked="OnCancelClicked" />
-            <Label Grid.Column="1"
+            <Label x:Name="PageTitleLabel"
+                   Grid.Column="1"
                    Text="Choose Model"
                    Style="{StaticResource StatusTitle}"
                    HorizontalOptions="Center"
                    VerticalOptions="Center" />
-            <controls:ActionButton Grid.Column="2"
+            <controls:ActionButton x:Name="RefreshButton"
+                                   Grid.Column="2"
                                    Text="Refresh"
                                    Prominence="Plain"
                                    Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
@@ -46,7 +48,7 @@
                        Focused="OnSearchFocused"
                        Unfocused="OnSearchUnfocused"
                        TextChanged="OnSearchTextChanged"
-                       SemanticProperties.Description="Search OpenRouter models" />
+                       SemanticProperties.Description="Search provider models" />
                 <controls:ActionButton x:Name="ClearSearchButton"
                                        Grid.Column="2"
                                        Text="Clear"
@@ -59,9 +61,36 @@
             </Grid>
         </Border>
 
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <Border x:Name="ManualModelWell" Style="{StaticResource FieldWell}" MinimumHeightRequest="40">
+                <Entry x:Name="ManualModelEntry"
+                       Placeholder="Exact model ID"
+                       FontSize="13"
+                       ReturnType="Done"
+                       Completed="OnUseManualModelClicked"
+                       Focused="OnManualModelFocused"
+                       Unfocused="OnManualModelUnfocused"
+                       TextChanged="OnManualModelTextChanged"
+                       SemanticProperties.Description="Manual provider model ID" />
+            </Border>
+            <controls:ActionButton x:Name="UseManualModelButton"
+                                   Grid.Column="1"
+                                   Text="Test &amp; Use"
+                                   Prominence="Plain"
+                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                   FontSize="13"
+                                   Clicked="OnUseManualModelClicked" />
+        </Grid>
+
+        <Label Grid.Row="3"
+               Text="Choosing a model runs a small strict-schema test. Cloud providers may charge for it; successful tests are reused until the endpoint or model changes."
+               Style="{StaticResource RowFooter}"
+               Margin="6,0"
+               LineBreakMode="WordWrap" />
+
         <Grid x:Name="CatalogNotice"
-              Grid.Row="2"
-              ColumnDefinitions="Auto,*,Auto"
+              Grid.Row="4"
+              ColumnDefinitions="Auto,*"
               ColumnSpacing="8"
               Margin="6,0"
               IsVisible="False">
@@ -74,15 +103,9 @@
                    Style="{StaticResource RowFooter}"
                    VerticalOptions="Center"
                    LineBreakMode="WordWrap" />
-            <controls:ActionButton Grid.Column="2"
-                                   Text="Retry"
-                                   Prominence="Plain"
-                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
-                                   FontSize="12"
-                                   Clicked="OnRefreshClicked" />
         </Grid>
 
-        <Grid Grid.Row="3">
+        <Grid Grid.Row="5">
             <Border x:Name="ModelListCard" Style="{StaticResource Card}">
                 <CollectionView x:Name="ModelList"
                                 SelectionMode="Single"
@@ -147,13 +170,6 @@
                        Style="{StaticResource RowFooter}"
                        HorizontalTextAlignment="Center"
                        LineBreakMode="WordWrap" />
-                <controls:ActionButton x:Name="ModelRetryButton"
-                                       Text="Try Again"
-                                       Prominence="Plain"
-                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
-                                       FontSize="13"
-                                       Clicked="OnRefreshClicked"
-                                       IsVisible="False" />
             </VerticalStackLayout>
         </Grid>
     </Grid>

@@ -15,7 +15,7 @@
     #2C2C2E rows in 10pt cards, hairline inset separators, SF Pro at system text
     sizes, SF Symbols, and one violet tint from #512BD4 used only on the primary
     action, the selected checkmark, the focus ring and the progress bar.
-    STORY: The user sees a file or recursive RESX folder, an OpenRouter account,
+    STORY: The user sees a file or recursive RESX folder, an LLM provider,
     a model and a language; understands what will be written and where; presses
     Translate once; watches animated batch-by-batch progress; ends with a result
     they can reveal in Finder.
@@ -106,19 +106,43 @@
                 </Border>
             </VerticalStackLayout>
 
-            <!-- ============ OPENROUTER ============ -->
+            <!-- ============ LLM PROVIDER ============ -->
             <VerticalStackLayout Spacing="0">
-                <Label Text="OpenRouter" Style="{StaticResource SectionHeader}" />
+                <Label Text="LLM Provider" Style="{StaticResource SectionHeader}" />
 
                 <Border Style="{StaticResource Card}">
                     <VerticalStackLayout>
+
+                        <Grid ColumnDefinitions="Auto,*,Auto"
+                              ColumnSpacing="10"
+                              Padding="14,9"
+                              MinimumHeightRequest="48">
+                            <Label Text="Provider"
+                                   Style="{StaticResource RowTitle}"
+                                   VerticalOptions="Center" />
+                            <Label x:Name="ProviderNameLabel"
+                                   Grid.Column="1"
+                                   Style="{StaticResource RowValue}"
+                                   HorizontalOptions="End"
+                                   VerticalOptions="Center" />
+                            <controls:ActionButton x:Name="ChooseProviderButton"
+                                                   Grid.Column="2"
+                                                   Text="Choose…"
+                                                   Prominence="Plain"
+                                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                   FontSize="13"
+                                                   Clicked="OnChooseProviderClicked"
+                                                   SemanticProperties.Description="Choose LLM provider" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource RowSeparator}" />
 
                         <Grid ColumnDefinitions="Auto,Auto,*,Auto"
                               ColumnSpacing="10"
                               Padding="14,10"
                               MinimumHeightRequest="44">
                             <Label Grid.Column="0"
-                                   Text="Account"
+                                   Text="Connection"
                                    Style="{StaticResource RowTitle}"
                                    VerticalOptions="Center" />
 
@@ -173,7 +197,7 @@
                                                    Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
                                                    FontSize="13"
                                                    Clicked="OnEditSettingsClicked"
-                                                   SemanticProperties.Description="Edit translation domain instructions and paid-model concurrency" />
+                                                   SemanticProperties.Description="Edit translation domain instructions and provider concurrency" />
                         </Grid>
 
                         <BoxView Style="{StaticResource RowSeparator}" />

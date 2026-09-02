@@ -116,7 +116,7 @@
                 </VerticalStackLayout>
 
                 <VerticalStackLayout Spacing="0">
-                    <Label Text="Paid-model requests" Style="{StaticResource SectionHeader}" />
+                    <Label x:Name="ConcurrencySectionLabel" Text="Provider requests" Style="{StaticResource SectionHeader}" />
                     <Border Style="{StaticResource Card}">
                         <VerticalStackLayout>
                             <Grid ColumnDefinitions="*,Auto,Auto,Auto"
@@ -133,7 +133,7 @@
                                                        Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
                                                        FontSize="17"
                                                        Clicked="OnDecreaseConcurrencyClicked"
-                                                       SemanticProperties.Description="Decrease paid-model concurrency" />
+                                                       SemanticProperties.Description="Decrease provider concurrency" />
                                 <Border Grid.Column="2"
                                         Style="{StaticResource FieldWell}"
                                         WidthRequest="92"
@@ -144,7 +144,7 @@
                                            HorizontalOptions="Center"
                                            VerticalOptions="Center"
                                            HorizontalTextAlignment="Center"
-                                           SemanticProperties.Description="Current maximum concurrency for paid models" />
+                                           SemanticProperties.Description="Current maximum provider concurrency" />
                                 </Border>
                                 <controls:ActionButton x:Name="IncreaseConcurrencyButton"
                                                        Grid.Column="3"
@@ -153,11 +153,12 @@
                                                        Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
                                                        FontSize="17"
                                                        Clicked="OnIncreaseConcurrencyClicked"
-                                                       SemanticProperties.Description="Increase paid-model concurrency" />
+                                                       SemanticProperties.Description="Increase provider concurrency" />
                             </Grid>
 
                             <BoxView Style="{StaticResource RowSeparator}" />
-                            <Label Text="Paid models use this 1–10 limit. Free and variable-price models remain fixed at 2 requests. Higher values may increase cost or trigger provider rate limits."
+                            <Label x:Name="ConcurrencyDetailLabel"
+                                   Text="This provider uses the selected 1–10 request limit."
                                    Style="{StaticResource RowFooter}"
                                    Padding="14,10"
                                    LineBreakMode="WordWrap" />

@@ -21,6 +21,14 @@ public static class MauiProgram
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
 			});
 
+		builder.Services.AddSingleton<OpenRouterClient>();
+		builder.Services.AddSingleton<LlmProviderRegistry>();
+		builder.Services.AddSingleton<LlmClient>();
+		builder.Services.AddSingleton(serviceProvider => new MainPage(
+			serviceProvider.GetRequiredService<LlmClient>(),
+			serviceProvider.GetRequiredService<LlmProviderRegistry>()));
+		builder.Services.AddSingleton<AppShell>();
+
 		CustomizeHandlers();
 
 #if DEBUG
