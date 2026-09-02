@@ -10,6 +10,7 @@ namespace ResXTranslator;
 sealed class OpenRouterClient
 {
     const int MaxProviderAttempts = 5;
+    const int MaxResponseCharacters = 5_000;
     const string SystemPrompt = """
         You are a professional software-localization translator for a sports fan engagement and ticketing application. Translate English product UI strings into the requested target language using natural, concise terminology appropriate for sports audiences, teams, scheduled competitions and events, venues, rewards, ticket purchasing, ticket management, and attendance.
 
@@ -171,7 +172,7 @@ sealed class OpenRouterClient
             {
                 failedAttemptUsage += ex.Usage;
                 throw new InvalidOperationException(
-                    $"This batch failed validation through {MaxProviderAttempts} different OpenRouter providers. " +
+                    $"This batch failed through {MaxProviderAttempts} different OpenRouter providers. " +
                     "The run was stopped and no output files were written.",
                     ex);
             }
@@ -452,7 +453,34 @@ sealed class OpenRouterClient
                     delta.TryGetProperty("content", out var content) &&
                     content.ValueKind is JsonValueKind.String or JsonValueKind.Array)
                 {
-                    structuredText.Append(ReadMessageContent(content));
+                    var contentFragment = ReadMessageContent(content);
+                    var nextCharacterCount = structuredText.Length + contentFragment.Length;
+
+                    if (nextCharacterCount > MaxResponseCharacters)
+                    {
+                        var limitException = new InvalidOperationException(
+                            $"The completion exceeded the {MaxResponseCharacters:N0}-character response limit.");
+                        AppDiagnostics.Write(
+                            "OpenRouter",
+                            $"Request {requestId} response limit exceeded; aborting stream | provider={provider ?? "unknown"} | contentChars={nextCharacterCount} | limit={MaxResponseCharacters} | events={eventCount} | bytes={responseBytes} | elapsed={stopwatch.Elapsed.TotalSeconds:F1}s");
+
+                        if (!string.IsNullOrWhiteSpace(provider))
+                        {
+                            throw new OpenRouterProviderException(
+                                requestId,
+                                provider,
+                                $"OpenRouter provider {provider} exceeded the {MaxResponseCharacters:N0}-character response limit for request {requestId}. The response was discarded.",
+                                limitException,
+                                usage);
+                        }
+
+                        throw new InvalidOperationException(
+                            $"OpenRouter exceeded the {MaxResponseCharacters:N0}-character response limit for request {requestId}, " +
+                            "but did not identify the provider. The response was discarded and cannot be safely retried through a different provider.",
+                            limitException);
+                    }
+
+                    structuredText.Append(contentFragment);
                 }
             }
 

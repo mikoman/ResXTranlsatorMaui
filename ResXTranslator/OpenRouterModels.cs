@@ -131,15 +131,20 @@ sealed class OpenRouterApiException : Exception
         : base(ToUserMessage(statusCode, apiMessage))
     {
         StatusCode = statusCode;
+        ApiMessage = apiMessage;
     }
 
     public HttpStatusCode StatusCode { get; }
+
+    public string? ApiMessage { get; }
 
     static string ToUserMessage(HttpStatusCode statusCode, string? apiMessage) => statusCode switch
     {
         HttpStatusCode.Unauthorized => "OpenRouter rejected the API key. Open Account and replace it.",
         HttpStatusCode.PaymentRequired => "This OpenRouter account does not have enough credit for the request.",
-        HttpStatusCode.NotFound => "The selected OpenRouter model is no longer available. Choose another model.",
+        HttpStatusCode.NotFound when !string.IsNullOrWhiteSpace(apiMessage) =>
+            $"OpenRouter could not route this request: {apiMessage}",
+        HttpStatusCode.NotFound => "OpenRouter could not find a compatible provider for this request.",
         HttpStatusCode.RequestTimeout => "OpenRouter timed out before completing the request. Please try again.",
         HttpStatusCode.TooManyRequests => "OpenRouter's rate limit was reached. Wait a moment before trying again.",
         HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout =>

@@ -736,9 +736,23 @@ public partial class MainPage : ContentPage
                 "Translation",
                 $"Run {runId} failed after {FormatRunDuration(_progressStopwatch.Elapsed)}",
                 ex);
-            _selectedModelUnavailable = true;
+
+            try
+            {
+                await RefreshModelsAsync();
+            }
+            catch (Exception catalogException)
+            {
+                AppDiagnostics.WriteException(
+                    "OpenRouter",
+                    "Could not refresh the model catalog after a routing 404",
+                    catalogException);
+            }
+
             RenderOpenRouterState();
-            ShowTranslationError(ex.Message);
+            ShowTranslationError(_selectedModelUnavailable
+                ? "The selected OpenRouter model is no longer available. Choose another model."
+                : ex.Message);
         }
         catch (Exception ex)
         {
