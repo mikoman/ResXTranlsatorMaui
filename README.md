@@ -80,15 +80,9 @@ The application can process a single `.resx`, `.csv`, or `.xlsx` file, or recurs
 5. Select **Translate** and monitor the queue. **Cancel Translation** stops the whole job; **Open Diagnostics Log** reveals metadata-only lifecycle records.
 6. Reveal the generated file from the success result, or export the currently loaded single file to Excel/CSV.
 
-```mermaid
-flowchart LR
-    A[RESX / CSV / XLSX] --> B[Bounded batches]
-    B --> C[OpenRouter model]
-    C --> D[Strict response validation]
-    D --> E{All batches valid?}
-    E -- Yes --> F[Write source-preserving output]
-    E -- No --> G[Stop without current-job output]
-```
+![Translation pipeline: source files are split into bounded batches, translated through OpenRouter, and written only after strict validation](docs/assets/translation-pipeline.svg)
+
+In short: source files → bounded batches → OpenRouter → strict validation. A fully valid job writes localized output without replacing the source; any failed batch stops the job without writing current-job output.
 
 ## Supported inputs and outputs
 
