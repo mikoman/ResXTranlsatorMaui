@@ -7,6 +7,62 @@ static class OpenRouterSettings
 {
     public const string ApiKeyStorageKey = "openrouter_api_key";
     public const string ModelPreferenceKey = "openrouter_model_id";
+    public const string DomainInstructionsPreferenceKey = "translation_domain_instructions";
+    public const string PaidConcurrencyPreferenceKey = "paid_model_concurrency";
+    public const int DefaultPaidConcurrency = 4;
+    public const int MinimumPaidConcurrency = 1;
+    public const int MaximumPaidConcurrency = 10;
+
+    public const string DefaultDomainInstructions = """
+        Translate English product UI strings for a sports fan engagement and ticketing application using natural, concise terminology appropriate for sports audiences, teams, scheduled competitions and events, venues, rewards, ticket purchasing, ticket management, and attendance.
+        """;
+
+    public static string LoadDomainInstructions()
+    {
+        var saved = Preferences.Default.Get(DomainInstructionsPreferenceKey, string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(saved) ? DefaultDomainInstructions : saved;
+    }
+
+    public static int LoadPaidConcurrency()
+    {
+        var saved = Preferences.Default.Get(PaidConcurrencyPreferenceKey, DefaultPaidConcurrency);
+        return saved is >= MinimumPaidConcurrency and <= MaximumPaidConcurrency
+            ? saved
+            : DefaultPaidConcurrency;
+    }
+
+    public static void Save(string domainInstructions, int paidConcurrency)
+    {
+        var normalizedInstructions = domainInstructions.Trim();
+
+        if (string.Equals(normalizedInstructions, DefaultDomainInstructions, StringComparison.Ordinal))
+        {
+            Preferences.Default.Remove(DomainInstructionsPreferenceKey);
+        }
+        else
+        {
+            Preferences.Default.Set(DomainInstructionsPreferenceKey, normalizedInstructions);
+        }
+
+        var normalizedConcurrency = Math.Clamp(
+            paidConcurrency,
+            MinimumPaidConcurrency,
+            MaximumPaidConcurrency);
+
+        if (normalizedConcurrency == DefaultPaidConcurrency)
+        {
+            Preferences.Default.Remove(PaidConcurrencyPreferenceKey);
+        }
+        else
+        {
+            Preferences.Default.Set(PaidConcurrencyPreferenceKey, normalizedConcurrency);
+        }
+    }
+
+    public static int GetParallelRequestLimit(OpenRouterModel model, int paidConcurrency) =>
+        model.IsDefinitelyPaid
+            ? Math.Clamp(paidConcurrency, MinimumPaidConcurrency, MaximumPaidConcurrency)
+            : 2;
 }
 
 enum OpenRouterConnectionState
@@ -31,8 +87,6 @@ sealed record OpenRouterModel(
     public bool IsDefinitelyFree => PromptPricePerToken == 0 && CompletionPricePerToken == 0;
 
     public bool IsDefinitelyPaid => PromptPricePerToken is > 0 || CompletionPricePerToken is > 0;
-
-    public int ParallelRequestLimit => IsDefinitelyPaid ? 4 : 2;
 
     public string PriceDescription
     {
@@ -61,6 +115,10 @@ sealed record OpenRouterModel(
         return perMillion.ToString("$0.####", CultureInfo.InvariantCulture);
     }
 }
+
+sealed record TranslationSettingsResult(string DomainInstructions, int PaidModelConcurrency);
+
+readonly record struct TranslationExecutionSettings(string DomainInstructions, int ParallelRequestLimit);
 
 sealed record OpenRouterTranslationInput(int Id, string Text);
 

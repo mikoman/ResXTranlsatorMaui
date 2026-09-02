@@ -57,6 +57,8 @@ The application can process a single `.resx`, `.csv`, or `.xlsx` file, or recurs
 - Model search by provider, name, and identifier.
 - Input/output pricing shown per million tokens when OpenRouter supplies fixed pricing.
 - The selected model is remembered between sessions.
+- Persistent domain-and-tone instructions with immutable locale, placeholder, data-safety, and response rules.
+- Optional AI assistance that turns a short product description into editable domain instructions using the selected model.
 - Optional reasoning is disabled and excluded from responses; required reasoning is excluded and disclosed in usage.
 
 ### Reliable translation jobs
@@ -64,7 +66,7 @@ The application can process a single `.resx`, `.csv`, or `.xlsx` file, or recurs
 - Strict JSON-schema responses with exactly one validated result for every input ID.
 - Batches capped at 40 strings and 10,000 source characters.
 - Global fair queue that interleaves folder work across files.
-- Up to 2 concurrent requests for free or unknown/variable-price models and 4 for paid models.
+- 2 concurrent requests for free or unknown/variable-price models and a configurable 1–10 limit for paid models.
 - Up to 5 provider attempts for a malformed response or provider-specific streaming failure.
 - Provider exclusions are scoped to the failed batch, never applied globally.
 - 15-minute timeout per batch, whole-job cancellation, and no current-job partial output.
@@ -75,10 +77,11 @@ The application can process a single `.resx`, `.csv`, or `.xlsx` file, or recurs
 
 1. Open **Manage…** under **OpenRouter**, paste an [OpenRouter API key](https://openrouter.ai/keys), and connect.
 2. Open **Choose…** beside **Model**, search the compatible live catalog, compare pricing, and select a model.
-3. Choose or drag in a `.resx`, `.csv`, or `.xlsx` file. Alternatively, choose a folder to scan its complete RESX tree.
-4. Choose one target language by English name, native name, country/region, or BCP-47 code.
-5. Select **Translate** and monitor the queue. **Cancel Translation** stops the whole job; **Open Diagnostics Log** reveals metadata-only lifecycle records.
-6. Reveal the generated file from the success result, or export the currently loaded single file to Excel/CSV.
+3. Optionally open **Translation settings** to customize the product domain and tone, generate a draft from a short description, or change paid-model concurrency.
+4. Choose or drag in a `.resx`, `.csv`, or `.xlsx` file. Alternatively, choose a folder to scan its complete RESX tree.
+5. Choose one target language by English name, native name, country/region, or BCP-47 code.
+6. Select **Translate** and monitor the queue. **Cancel Translation** stops the whole job; **Open Diagnostics Log** reveals metadata-only lifecycle records.
+7. Reveal the generated file from the success result, or export the currently loaded single file to Excel/CSV.
 
 ![Translation pipeline: source files are split into bounded batches, translated through OpenRouter, and written only after strict validation](docs/assets/translation-pipeline.svg)
 
@@ -126,7 +129,9 @@ Translating to `fr-CA` inserts `fr-CA` and `fr-CA Status` after the last existin
 
 ## OpenRouter translation pipeline
 
-ResXTranslator uses OpenRouter's `chat/completions` endpoint with streaming enabled and a strict JSON schema. The system prompt asks for natural software localization in a sports fan-engagement and ticketing context while preserving placeholders, interpolation tokens, markup, URLs, whitespace, line breaks, and proper nouns unless a standard localized form exists. Source strings are explicitly treated as untrusted data rather than instructions.
+ResXTranslator uses OpenRouter's `chat/completions` endpoint with streaming enabled and a strict JSON schema. The default domain guidance covers sports fan engagement and ticketing, but it can be edited in **Translation settings**. The app always adds non-editable rules for the exact locale, placeholders, interpolation tokens, markup, URLs, whitespace, line breaks, proper nouns, untrusted source data, and exact response IDs.
+
+The optional AI helper makes one potentially billable request to the selected model and replaces only the settings-sheet draft. The generated instructions do not become active until **Save** is selected. Its own system instruction is built into the application and is not editable.
 
 The pipeline is deliberately conservative:
 
@@ -138,14 +143,14 @@ The pipeline is deliberately conservative:
 6. Retry provider-specific malformed/failed streams through a different provider, up to five attempts.
 7. Write files only after the complete queue validates.
 
-Free models run at most two requests concurrently. Models with a known positive input or output token price run at most four. Missing, negative, or variable pricing uses the conservative two-request limit.
+Free models run at most two requests concurrently. Models with a known positive input or output token price use the saved paid-model limit, which can be set from 1 through 10 and defaults to four. Missing, negative, or variable pricing uses the conservative two-request limit. Up to four active requests are shown individually in the compact progress area; any additional active requests are summarized.
 
 ## Data, credentials, and diagnostics
 
 Using the application sends the selected source strings, target locale, model ID, and translation instructions to OpenRouter and the provider it routes to. An internet connection and an OpenRouter account are required; model/provider terms, privacy policies, rate limits, and charges apply.
 
 - **API key:** Stored in the macOS login Keychain for local Mac Catalyst builds. Other platforms use .NET MAUI `SecureStorage`. The key is not stored in application preferences and is not shown again after the account sheet closes.
-- **Model preference:** Only the selected model ID is stored in ordinary app preferences.
+- **Ordinary preferences:** The selected model ID, custom domain-and-tone instructions, and non-default paid-model concurrency are stored in ordinary app preferences. Restoring defaults removes the corresponding overrides.
 - **Translation content:** Held in memory while a job runs. The app does not write partial current-job translations before the full queue validates.
 - **Diagnostics:** The local log records timestamps, short request/session IDs, model and locale metadata, counts, routing stages, token totals, response sizes, durations, and exception messages. Callers are designed not to log credentials, headers, prompts, or source/translated string content.
 - **Log rotation:** `resxtranslator.log` rotates at approximately 1 MB to one `resxtranslator.previous.log` file under the app-data `Logs` directory.
@@ -222,6 +227,7 @@ To compile another enabled platform, replace the target framework with `net10.0-
 |---|---|
 | `ResXTranslator/MainPage.xaml(.cs)` | Main workflow, file/folder input, batching, queue coordination, progress, output, and exports |
 | `ResXTranslator/OpenRouterClient.cs` | Authentication checks, live model/provider catalogs, streaming requests, schema validation, retries, and API errors |
+| `ResXTranslator/TranslationSettingsPage.xaml(.cs)` | Domain-and-tone editing, AI prompt assistance, and paid-model concurrency settings |
 | `ResXTranslator/OpenRouterCredentialStore.cs` | Keychain/SecureStorage credential persistence |
 | `ResXTranslator/LanguageCatalog.cs` | Searchable platform culture catalog and BCP-47 target metadata |
 | `ResXTranslator/ResXParser.cs` | Plain-string RESX reading and localized RESX writing |
@@ -285,7 +291,7 @@ The source directory was probably not writable. For single-file jobs, check `Doc
 
 ## Known limitations
 
-- The translation prompt is intentionally specialized for sports, events, venues, rewards, and ticketing terminology; it is not configurable in the UI.
+- Core localization and response safeguards are intentionally not editable; only domain-and-tone guidance can be customized.
 - One target language is added per run.
 - Translation requires OpenRouter and therefore is not offline or deterministic.
 - Model pricing shown in the app is catalog metadata, not a final cost guarantee.

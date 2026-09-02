@@ -17,6 +17,8 @@ public partial class MainPage : ContentPage
     string? _apiKey;
     IReadOnlyList<OpenRouterModel> _models = [];
     OpenRouterModel? _selectedModel;
+    string _domainInstructions = OpenRouterSettings.DefaultDomainInstructions;
+    int _paidModelConcurrency = OpenRouterSettings.DefaultPaidConcurrency;
     OpenRouterConnectionState _connectionState = OpenRouterConnectionState.NotConnected;
     OpenRouterTokenUsage _translationUsage;
     bool _catalogLoadedSuccessfully;
@@ -36,9 +38,11 @@ public partial class MainPage : ContentPage
     {
         InitializeComponent();
         RestoreSelectedModel();
+        RestoreTranslationSettings();
         RenderLanguageState();
         RenderSourceRow();
         RenderOpenRouterState();
+        RenderTranslationSettings();
         UpdateActionState();
 
         Loaded += OnLoaded;
@@ -72,6 +76,12 @@ public partial class MainPage : ContentPage
         {
             _selectedModel = new OpenRouterModel(savedId, savedId, null, null);
         }
+    }
+
+    void RestoreTranslationSettings()
+    {
+        _domainInstructions = OpenRouterSettings.LoadDomainInstructions();
+        _paidModelConcurrency = OpenRouterSettings.LoadPaidConcurrency();
     }
 
     async Task InitializeOpenRouterAsync()
@@ -230,7 +240,8 @@ public partial class MainPage : ContentPage
             _openRouterClient,
             _apiKey,
             _models,
-            _selectedModel?.Id);
+            _selectedModel?.Id,
+            _paidModelConcurrency);
         await Navigation.PushModalAsync(page);
         var model = await page.Completion;
 
@@ -244,6 +255,49 @@ public partial class MainPage : ContentPage
         Preferences.Default.Set(OpenRouterSettings.ModelPreferenceKey, model.Id);
         RenderOpenRouterState();
         UpdateActionState();
+    }
+
+    async void OnEditSettingsClicked(object? sender, EventArgs e)
+    {
+        if (_isBusy)
+        {
+            return;
+        }
+
+        var hasUsableKey = !string.IsNullOrWhiteSpace(_apiKey) &&
+            _connectionState is OpenRouterConnectionState.Connected or OpenRouterConnectionState.Unverified;
+        var generatorModel = hasUsableKey && !_selectedModelUnavailable ? _selectedModel : null;
+        var page = new TranslationSettingsPage(
+            _openRouterClient,
+            _domainInstructions,
+            _paidModelConcurrency,
+            hasUsableKey ? _apiKey : null,
+            generatorModel);
+        await Navigation.PushModalAsync(page);
+        var result = await page.Completion;
+
+        if (result is null)
+        {
+            return;
+        }
+
+        OpenRouterSettings.Save(result.DomainInstructions, result.PaidModelConcurrency);
+        RestoreTranslationSettings();
+        RenderTranslationSettings();
+    }
+
+    void RenderTranslationSettings()
+    {
+        var domain = string.Equals(
+            _domainInstructions,
+            OpenRouterSettings.DefaultDomainInstructions,
+            StringComparison.Ordinal)
+                ? "Default domain"
+                : "Custom domain";
+        SettingsSummaryLabel.Text = $"{domain} · {_paidModelConcurrency:N0} paid max";
+        SemanticProperties.SetDescription(
+            SettingsSummaryLabel,
+            $"{domain}. Maximum {_paidModelConcurrency:N0} concurrent requests for paid models.");
     }
 
     void RenderOpenRouterState()
@@ -683,19 +737,22 @@ public partial class MainPage : ContentPage
                 throw new InvalidOperationException("The selected OpenRouter model is unavailable. Choose another model.");
             }
 
+            var runSettings = new TranslationExecutionSettings(
+                _domainInstructions,
+                OpenRouterSettings.GetParallelRequestLimit(model, _paidModelConcurrency));
             _translationUsage = default;
 
             if (_pickedFolder is not null)
             {
-                await TranslateResXFolderAsync(apiKey, model, cancellationToken);
+                await TranslateResXFolderAsync(apiKey, model, runSettings, cancellationToken);
             }
             else if (_selectedFilePath is { } path && IsResX(path))
             {
-                await TranslateResXAsync(apiKey, model, path, cancellationToken);
+                await TranslateResXAsync(apiKey, model, runSettings, path, cancellationToken);
             }
             else if (_selectedFilePath is { } spreadsheetPath)
             {
-                await TranslateSpreadsheetAsync(apiKey, model, spreadsheetPath, cancellationToken);
+                await TranslateSpreadsheetAsync(apiKey, model, runSettings, spreadsheetPath, cancellationToken);
             }
             else
             {
@@ -815,6 +872,7 @@ public partial class MainPage : ContentPage
     async Task TranslateResXAsync(
         string apiKey,
         OpenRouterModel model,
+        TranslationExecutionSettings runSettings,
         string path,
         CancellationToken cancellationToken)
     {
@@ -830,12 +888,13 @@ public partial class MainPage : ContentPage
         var writtenFiles = await TranslateResXWorkItemsAsync(
             apiKey,
             model,
+            runSettings,
             [workItem],
             GetSelectedLanguage(),
             progress,
             cancellationToken);
 
-        ShowUsage(BuildUsageSummary(model));
+        ShowUsage(BuildUsageSummary(model, runSettings.ParallelRequestLimit));
         ShowSuccess(
             "Translated into 1 language",
             $"Completed in {FormatRunDuration(_progressStopwatch.Elapsed)}.",
@@ -845,6 +904,7 @@ public partial class MainPage : ContentPage
     async Task TranslateResXFolderAsync(
         string apiKey,
         OpenRouterModel model,
+        TranslationExecutionSettings runSettings,
         CancellationToken cancellationToken)
     {
         if (_folderResxFiles.Count == 0)
@@ -868,13 +928,14 @@ public partial class MainPage : ContentPage
         var writtenFiles = await TranslateResXWorkItemsAsync(
             apiKey,
             model,
+            runSettings,
             translatableItems,
             GetSelectedLanguage(),
             progress,
             cancellationToken);
 
         var skipped = workItems.Length - translatableItems.Length;
-        ShowUsage(BuildUsageSummary(model));
+        ShowUsage(BuildUsageSummary(model, runSettings.ParallelRequestLimit));
         ShowSuccess(
             $"Translated {translatableItems.Length:N0} RESX {(translatableItems.Length == 1 ? "file" : "files")}",
             skipped == 0
@@ -888,6 +949,7 @@ public partial class MainPage : ContentPage
     async Task<IReadOnlyList<string>> TranslateResXWorkItemsAsync(
         string apiKey,
         OpenRouterModel model,
+        TranslationExecutionSettings runSettings,
         IReadOnlyList<ResXWorkItem> items,
         TargetLanguageOption targetLanguage,
         TranslationProgress progress,
@@ -920,6 +982,7 @@ public partial class MainPage : ContentPage
         await TranslateBatchQueueAsync(
             apiKey,
             model,
+            runSettings,
             targetLanguage,
             workQueue,
             progress,
@@ -960,6 +1023,7 @@ public partial class MainPage : ContentPage
     async Task TranslateSpreadsheetAsync(
         string apiKey,
         OpenRouterModel model,
+        TranslationExecutionSettings runSettings,
         string path,
         CancellationToken cancellationToken)
     {
@@ -1006,6 +1070,7 @@ public partial class MainPage : ContentPage
         await TranslateBatchQueueAsync(
             apiKey,
             model,
+            runSettings,
             selectedLanguage,
             workQueue,
             progress,
@@ -1031,7 +1096,7 @@ public partial class MainPage : ContentPage
             "Translation",
             $"Saved translated spreadsheet | file={Path.GetFileName(outputPath)} | rows={sourceRows.Count}");
 
-        ShowUsage(BuildUsageSummary(model));
+        ShowUsage(BuildUsageSummary(model, runSettings.ParallelRequestLimit));
         RenderLanguageState();
         ShowSuccess(
             $"Added {selectedLanguage.ColumnHeader}",
@@ -1063,6 +1128,7 @@ public partial class MainPage : ContentPage
     async Task TranslateBatchQueueAsync(
         string apiKey,
         OpenRouterModel model,
+        TranslationExecutionSettings runSettings,
         TargetLanguageOption targetLanguage,
         IReadOnlyList<TranslationBatchWork> workQueue,
         TranslationProgress progress,
@@ -1073,7 +1139,7 @@ public partial class MainPage : ContentPage
             return;
         }
 
-        var concurrency = GetConcurrency(model);
+        var concurrency = runSettings.ParallelRequestLimit;
         var workerCount = Math.Min(concurrency, workQueue.Count);
         var nextWorkIndex = -1;
         _activeConcurrency = concurrency;
@@ -1111,6 +1177,7 @@ public partial class MainPage : ContentPage
                         apiKey,
                         model,
                         targetLanguage.ModelTarget,
+                        runSettings.DomainInstructions,
                         work.Inputs,
                         requestProgress,
                         failFastCancellation.Token);
@@ -1170,8 +1237,6 @@ public partial class MainPage : ContentPage
         _activeConcurrency = 0;
     }
 
-    static int GetConcurrency(OpenRouterModel model) => model.ParallelRequestLimit;
-
     static string GetPricingClass(OpenRouterModel model) => model switch
     {
         { IsDefinitelyPaid: true } => "paid",
@@ -1179,14 +1244,14 @@ public partial class MainPage : ContentPage
         _ => "unknown-conservative"
     };
 
-    string BuildUsageSummary(OpenRouterModel model)
+    string BuildUsageSummary(OpenRouterModel model, int parallelRequestLimit)
     {
         var reasoning = _translationUsage.ReasoningTokens > 0
             ? $"  ·  {_translationUsage.ReasoningTokens:N0} reasoning excluded"
             : string.Empty;
         return $"{model.Name}  ·  {_translationUsage.PromptTokens:N0} input  ·  " +
             $"{_translationUsage.CompletionTokens:N0} output{reasoning}  ·  {_translationUsage.TotalTokens:N0} total tokens  ·  " +
-            $"{model.ParallelRequestLimit:N0} parallel";
+            $"{parallelRequestLimit:N0} parallel";
     }
 
     // ------------------------------------------------------------------ Export
@@ -1275,6 +1340,7 @@ public partial class MainPage : ContentPage
         ManageAccountButton.IsEnabled = !busy;
         ChooseModelButton.IsEnabled = !busy && !string.IsNullOrWhiteSpace(_apiKey);
         ChooseLanguageButton.IsEnabled = !busy;
+        EditSettingsButton.IsEnabled = !busy;
         ProgressGroup.IsVisible = busy;
         CancelTranslationButton.IsVisible = busy && _translationCancellation is not null;
         CancelTranslationButton.IsEnabled = busy && _translationCancellation is { IsCancellationRequested: false };
@@ -1325,6 +1391,7 @@ public partial class MainPage : ContentPage
         ManageAccountButton.IsEnabled = !_isBusy;
         ChooseModelButton.IsEnabled = !_isBusy && hasUsableKey;
         ChooseLanguageButton.IsEnabled = !_isBusy;
+        EditSettingsButton.IsEnabled = !_isBusy;
         TranslateButton.IsEnabled = !_isBusy && hasSource && hasUsableKey && hasModel && hasLanguage;
         ExportButton.IsEnabled = !_isBusy && hasSingleFile;
         ExportCsvButton.IsEnabled = !_isBusy && hasSingleFile;
@@ -1412,16 +1479,25 @@ public partial class MainPage : ContentPage
         var summary = $"{progress.Completed:N0} of {progress.Total:N0} entries complete · " +
             $"{progress.CompletedBatches:N0} of {progress.TotalBatches:N0} batches ({batchPercent:N0}%) · " +
             $"{_activeConcurrency:N0} max parallel";
-        var requestLines = _activeRequests.Values
+        var orderedRequests = _activeRequests.Values
             .OrderBy(status => status.RequestId, StringComparer.Ordinal)
+            .ToArray();
+        var requestLines = orderedRequests
+            .Take(4)
             .Select(status =>
                 $"{status.RequestId} · {status.DisplayContext} · batch {status.BatchNumber:N0}/{status.BatchCount:N0} · " +
                 (status.AttemptNumber > 1
                     ? $"retry {status.AttemptNumber:N0}/{status.MaximumAttempts:N0} · "
                     : string.Empty) +
                 $"{status.Phase} · {FormatElapsed(DateTimeOffset.UtcNow - status.StartedAt)}")
-            .ToArray();
-        _progressDetail = requestLines.Length == 0
+            .ToList();
+
+        if (orderedRequests.Length > requestLines.Count)
+        {
+            requestLines.Add($"+ {orderedRequests.Length - requestLines.Count:N0} more active requests");
+        }
+
+        _progressDetail = requestLines.Count == 0
             ? summary
             : summary + Environment.NewLine + string.Join(Environment.NewLine, requestLines);
         RenderProgressMessage();

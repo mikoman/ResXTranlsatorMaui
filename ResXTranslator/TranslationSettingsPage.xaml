@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<controls:ModalSheetPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                         xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                         xmlns:controls="clr-namespace:ResXTranslator.Controls"
+                         x:Class="ResXTranslator.TranslationSettingsPage"
+                         x:ClassModifier="internal"
+                         Title="Translation Settings"
+                         Shell.NavBarIsVisible="False">
+
+    <Grid Padding="20,16,20,22" RowDefinitions="Auto,*" RowSpacing="14">
+        <Grid ColumnDefinitions="Auto,*,Auto" MinimumHeightRequest="32">
+            <controls:ActionButton x:Name="CancelButton"
+                                   Text="Cancel"
+                                   Prominence="Plain"
+                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                   FontSize="13"
+                                   Clicked="OnCancelClicked"
+                                   SemanticProperties.Description="Discard translation settings changes" />
+            <Label Grid.Column="1"
+                   Text="Translation Settings"
+                   Style="{StaticResource StatusTitle}"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center" />
+            <controls:ActionButton x:Name="SaveButton"
+                                   Grid.Column="2"
+                                   Text="Save"
+                                   Prominence="Plain"
+                                   Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                   FontSize="13"
+                                   Clicked="OnSaveClicked"
+                                   SemanticProperties.Description="Save translation settings" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="16"
+                                 MaximumWidthRequest="580"
+                                 HorizontalOptions="Fill">
+
+                <VerticalStackLayout Spacing="0">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="Domain and tone" Style="{StaticResource SectionHeader}" />
+                        <controls:ActionButton Grid.Column="1"
+                                               Text="Restore Default"
+                                               Prominence="Plain"
+                                               Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                               FontSize="12"
+                                               Clicked="OnRestoreDefaultClicked" />
+                    </Grid>
+                    <Border x:Name="DomainWell"
+                            Style="{StaticResource FieldWell}"
+                            HeightRequest="180"
+                            Padding="10,8">
+                        <Editor x:Name="DomainEditor"
+                                Placeholder="Describe the product domain, audience, terminology, and tone"
+                                FontSize="13"
+                                VerticalOptions="Fill"
+                                Focused="OnDomainFocused"
+                                Unfocused="OnDomainUnfocused"
+                                TextChanged="OnDomainTextChanged"
+                                SemanticProperties.Description="Editable translation domain and tone instructions" />
+                    </Border>
+                    <Label Text="These instructions customize the subject matter and voice. Locale handling, placeholders, markup, untrusted input, and exact response IDs are always protected by built-in rules."
+                           Style="{StaticResource RowFooter}"
+                           Padding="6,7,6,0"
+                           LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Spacing="0">
+                    <Label Text="AI prompt helper" Style="{StaticResource SectionHeader}" />
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="8"
+                                  Padding="10,7"
+                                  MinimumHeightRequest="48">
+                                <Border x:Name="BriefWell"
+                                        Style="{StaticResource FieldWell}"
+                                        MinimumHeightRequest="40">
+                                    <Entry x:Name="BriefEntry"
+                                           Placeholder="e.g. A friendly medical booking app"
+                                           FontSize="13"
+                                           ReturnType="Done"
+                                           Completed="OnGenerateClicked"
+                                           Focused="OnBriefFocused"
+                                           Unfocused="OnBriefUnfocused"
+                                           TextChanged="OnBriefTextChanged"
+                                           SemanticProperties.Description="Short description used to generate domain instructions" />
+                                </Border>
+                                <controls:ActionButton x:Name="GenerateButton"
+                                                       Grid.Column="1"
+                                                       Text="Generate"
+                                                       Prominence="Plain"
+                                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                       FontSize="13"
+                                                       Clicked="OnGenerateClicked" />
+                            </Grid>
+
+                            <BoxView Style="{StaticResource RowSeparator}" />
+
+                            <Grid ColumnDefinitions="Auto,*"
+                                  ColumnSpacing="8"
+                                  Padding="14,9">
+                                <ActivityIndicator x:Name="GenerationActivity"
+                                                   WidthRequest="15"
+                                                   HeightRequest="15"
+                                                   IsVisible="False"
+                                                   IsRunning="False"
+                                                   VerticalOptions="Start" />
+                                <Label x:Name="GeneratorDetailLabel"
+                                       Grid.Column="1"
+                                       Style="{StaticResource RowFooter}"
+                                       LineBreakMode="WordWrap" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Spacing="0">
+                    <Label Text="Paid-model requests" Style="{StaticResource SectionHeader}" />
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto,Auto,Auto"
+                                  ColumnSpacing="6"
+                                  Padding="14,9"
+                                  MinimumHeightRequest="48">
+                                <Label Text="Maximum concurrency"
+                                       Style="{StaticResource RowTitle}"
+                                       VerticalOptions="Center" />
+                                <controls:ActionButton x:Name="DecreaseConcurrencyButton"
+                                                       Grid.Column="1"
+                                                       Text="−"
+                                                       Prominence="Plain"
+                                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                       FontSize="17"
+                                                       Clicked="OnDecreaseConcurrencyClicked"
+                                                       SemanticProperties.Description="Decrease paid-model concurrency" />
+                                <Border Grid.Column="2"
+                                        Style="{StaticResource FieldWell}"
+                                        WidthRequest="92"
+                                        HeightRequest="34"
+                                        Padding="6,0">
+                                    <Label x:Name="ConcurrencyValueLabel"
+                                           Style="{StaticResource RowValue}"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           HorizontalTextAlignment="Center"
+                                           SemanticProperties.Description="Current maximum concurrency for paid models" />
+                                </Border>
+                                <controls:ActionButton x:Name="IncreaseConcurrencyButton"
+                                                       Grid.Column="3"
+                                                       Text="+"
+                                                       Prominence="Plain"
+                                                       Accent="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
+                                                       FontSize="17"
+                                                       Clicked="OnIncreaseConcurrencyClicked"
+                                                       SemanticProperties.Description="Increase paid-model concurrency" />
+                            </Grid>
+
+                            <BoxView Style="{StaticResource RowSeparator}" />
+                            <Label Text="Paid models use this 1–10 limit. Free and variable-price models remain fixed at 2 requests. Higher values may increase cost or trigger provider rate limits."
+                                   Style="{StaticResource RowFooter}"
+                                   Padding="14,10"
+                                   LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+
+                <Grid x:Name="SettingsError"
+                      ColumnDefinitions="Auto,*"
+                      ColumnSpacing="8"
+                      Margin="6,-4,6,0"
+                      IsVisible="False">
+                    <controls:SymbolImage Symbol="exclamationmark.triangle.fill"
+                                          PointSize="14"
+                                          Tint="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource DangerDark}}"
+                                          VerticalOptions="Start" />
+                    <Label x:Name="SettingsErrorLabel"
+                           Grid.Column="1"
+                           Style="{StaticResource RowFooter}"
+                           TextColor="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource DangerDark}}"
+                           LineBreakMode="WordWrap" />
+                </Grid>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</controls:ModalSheetPage>

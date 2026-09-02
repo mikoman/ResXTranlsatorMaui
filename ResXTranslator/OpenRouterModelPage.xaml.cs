@@ -8,6 +8,7 @@ partial class OpenRouterModelPage : ModalSheetPage
     readonly OpenRouterClient _client;
     readonly string _apiKey;
     readonly string? _selectedModelId;
+    readonly int _paidModelConcurrency;
     readonly TaskCompletionSource<OpenRouterModel?> _completion =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
     readonly CancellationTokenSource _cancellation = new();
@@ -22,12 +23,14 @@ partial class OpenRouterModelPage : ModalSheetPage
         OpenRouterClient client,
         string apiKey,
         IReadOnlyList<OpenRouterModel> models,
-        string? selectedModelId)
+        string? selectedModelId,
+        int paidModelConcurrency)
     {
         _client = client;
         _apiKey = apiKey;
         _models = models;
         _selectedModelId = selectedModelId;
+        _paidModelConcurrency = paidModelConcurrency;
         PreferredSheetWidth = 580;
         PreferredSheetHeight = 430;
         InitializeComponent();
@@ -138,7 +141,10 @@ partial class OpenRouterModelPage : ModalSheetPage
 
         foreach (var model in filtered)
         {
-            _rows.Add(new OpenRouterModelListItem(model, model.Id == _selectedModelId));
+            _rows.Add(new OpenRouterModelListItem(
+                model,
+                model.Id == _selectedModelId,
+                OpenRouterSettings.GetParallelRequestLimit(model, _paidModelConcurrency)));
         }
 
         if (_isLoading && _models.Count == 0)
@@ -216,12 +222,12 @@ partial class OpenRouterModelPage : ModalSheetPage
         _completion.TrySetResult(null);
     }
 
-    sealed record OpenRouterModelListItem(OpenRouterModel Model, bool IsSelected)
+    sealed record OpenRouterModelListItem(OpenRouterModel Model, bool IsSelected, int ParallelRequestLimit)
     {
         public string Name => Model.Name;
         public string Id => Model.Id;
         public string PriceDescription =>
-            $"{Model.PriceDescription} · {Model.ParallelRequestLimit} parallel requests";
+            $"{Model.PriceDescription} · {ParallelRequestLimit} parallel requests";
         public bool RequiresReasoning => Model.RequiresReasoning;
         public string ReasoningDescription => "Reasoning required · excluded from response";
     }
