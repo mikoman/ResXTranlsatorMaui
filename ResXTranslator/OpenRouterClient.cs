@@ -425,7 +425,7 @@ sealed class OpenRouterClient
         catch (TimeoutException ex) when (cancellationToken.IsCancellationRequested)
         {
             // NSURLSession can surface cancellation as a TimeoutException on
-            // Apple platforms. Preserve the caller's cancellation so a failed
+            // Mac Catalyst. Preserve the caller's cancellation so a failed
             // sibling request does not get misreported as another timeout.
             AppDiagnostics.Write("OpenRouter", $"Request {requestId} cancelled after {stopwatch.Elapsed.TotalSeconds:F1}s");
             throw new OperationCanceledException("The OpenRouter request was cancelled.", ex, cancellationToken);

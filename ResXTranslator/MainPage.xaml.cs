@@ -724,7 +724,7 @@ public partial class MainPage : ContentPage
             return;
         }
 
-#if IOS || MACCATALYST
+#if MACCATALYST
         var session = e.PlatformArgs?.DropSession;
 
         if (session is null)
@@ -1770,8 +1770,10 @@ public partial class MainPage : ContentPage
 
     static bool IsReduceMotionEnabled()
     {
-#if IOS || MACCATALYST
+#if MACCATALYST
         return UIKit.UIAccessibility.IsReduceMotionEnabled;
+#elif WINDOWS
+        return !new Windows.UI.ViewManagement.UISettings().AnimationsEnabled;
 #else
         return false;
 #endif

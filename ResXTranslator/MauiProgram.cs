@@ -16,7 +16,7 @@ public static class MauiProgram
 			{
 				// Registered as aliases only. Nothing in Styles.xaml names them, so
 				// every control falls through to the platform system face: SF Pro on
-				// Mac Catalyst and iOS, Segoe UI Variable on Windows.
+				// Mac Catalyst and Segoe UI Variable on Windows.
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
 			});
@@ -53,7 +53,7 @@ public static class MauiProgram
 				return;
 			}
 
-#if IOS || MACCATALYST
+#if MACCATALYST
 			if (handler.PlatformView is not UIKit.UIButton native)
 			{
 				return;
@@ -94,7 +94,7 @@ public static class MauiProgram
 
 		ImageHandler.Mapper.AppendToMapping(SymbolImage.SymbolMapperKey, (handler, view) =>
 		{
-#if IOS || MACCATALYST
+#if MACCATALYST
 			if (view is SymbolImage symbol && handler.PlatformView is UIKit.UIImageView imageView)
 			{
 				if (symbol.Tint is { } tint)
@@ -107,7 +107,7 @@ public static class MauiProgram
 #endif
 		});
 
-#if IOS || MACCATALYST
+#if MACCATALYST
 		// The Entry sits inside our own FieldWell border. Clearing the native
 		// RoundedRect bezel stops it reading as double-framed.
 		EntryHandler.Mapper.AppendToMapping("Entry.NoNativeBezel", (handler, _) =>

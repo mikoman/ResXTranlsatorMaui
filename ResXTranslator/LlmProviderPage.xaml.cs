@@ -20,8 +20,8 @@ partial class LlmProviderPage : ModalSheetPage
             provider.Name,
             provider.IsLocal
                 ? provider.IsAvailable
-                    ? "Local inference · endpoint runs on this Mac or private network"
-                    : "Local inference · available on Mac Catalyst"
+                    ? "Local inference · endpoint runs on this computer or private network"
+                    : "Local inference · available in desktop builds"
                 : provider.Id == LlmProviderId.Custom
                     ? "Strict-schema OpenAI-compatible HTTPS or private-network HTTP"
                     : "Cloud provider · API key stored securely on this device",
@@ -42,8 +42,8 @@ partial class LlmProviderPage : ModalSheetPage
         if (!row.IsAvailable)
         {
             await DisplayAlertAsync(
-                "Available on Mac",
-                "Ollama and LM Studio local endpoints are supported on Mac Catalyst in this release.",
+                "Available on desktop",
+                "Ollama and LM Studio local endpoints are supported on Mac Catalyst and Windows.",
                 "OK");
             return;
         }

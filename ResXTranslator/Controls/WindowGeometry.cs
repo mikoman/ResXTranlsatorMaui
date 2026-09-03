@@ -6,7 +6,7 @@ using UIKit;
 namespace ResXTranslator.Controls;
 
 /// <summary>
-/// Sizes the desktop window on Mac Catalyst.
+/// Sizes the desktop window on Mac Catalyst and Windows.
 /// </summary>
 /// <remarks>
 /// MAUI's <c>Window.Width</c>/<c>Height</c> path does not land here, for two
@@ -85,6 +85,12 @@ static class WindowGeometry
                 scene.RequestGeometryUpdate(preferences, _ => { });
             }
         });
+#elif WINDOWS
+        window.MinimumWidth = MinimumWidth;
+        window.MinimumHeight = MinimumHeight;
+        window.Width = PreferredWidth;
+        window.Height = PreferredHeight;
+        _applied = true;
 #endif
     }
 }

@@ -43,7 +43,8 @@ sealed record LlmProviderDescriptor(
     bool IsLocal,
     LlmProviderCapabilities Capabilities)
 {
-    public bool IsAvailable => !IsLocal || OperatingSystem.IsMacCatalyst();
+    public bool IsAvailable =>
+        !IsLocal || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsWindows();
 }
 
 sealed record LlmConnectionProfile(

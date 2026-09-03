@@ -1,4 +1,4 @@
-#if IOS || MACCATALYST
+#if MACCATALYST
 using Foundation;
 using UIKit;
 using UniformTypeIdentifiers;
@@ -19,7 +19,7 @@ static class FolderPickerService
 {
     public static async Task<PickedFolder?> PickAsync()
     {
-#if IOS || MACCATALYST
+#if MACCATALYST
         var presenter = GetPresenter();
 
         if (presenter is null)
@@ -37,19 +37,26 @@ static class FolderPickerService
         picker.Delegate = pickerDelegate;
         presenter.PresentViewController(picker, true, null);
         return await completion.Task;
-#else
-        // MAUI does not expose a dependency-free cross-platform folder picker.
-        // On non-Apple targets, choosing any RESX grants access to its folder.
-        var file = await FilePicker.Default.PickAsync(new PickOptions
+#elif WINDOWS
+        var window = Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView
+            as Microsoft.UI.Xaml.Window;
+        if (window is null)
         {
-            PickerTitle = "Choose any RESX file in the folder to translate"
-        });
-        var directory = file is null ? null : System.IO.Path.GetDirectoryName(file.FullPath);
-        return string.IsNullOrWhiteSpace(directory) ? null : new PickedFolder(directory);
+            throw new InvalidOperationException("The folder picker could not find the application window.");
+        }
+
+        var picker = new Windows.Storage.Pickers.FolderPicker();
+        picker.FileTypeFilter.Add("*");
+        var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, windowHandle);
+        var folder = await picker.PickSingleFolderAsync();
+        return folder is null ? null : new PickedFolder(folder.Path);
+#else
+        throw new PlatformNotSupportedException("ResXTranslator supports desktop folder selection only.");
 #endif
     }
 
-#if IOS || MACCATALYST
+#if MACCATALYST
     static UIViewController? GetPresenter()
     {
         var controller = UIApplication.SharedApplication.ConnectedScenes

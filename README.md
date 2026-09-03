@@ -8,7 +8,7 @@
   [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
   [![.NET MAUI](https://img.shields.io/badge/.NET_MAUI-native_apps-512BD4)](https://learn.microsoft.com/dotnet/maui/)
   [![Microsoft.Extensions.AI](https://img.shields.io/badge/Microsoft.Extensions.AI-provider_neutral-6467F2)](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai)
-  [![macOS](https://img.shields.io/badge/macOS-primary_platform-000000?logo=apple&logoColor=white)](#platform-status)
+  [![Desktop](https://img.shields.io/badge/Desktop-macOS_%7C_Windows-000000)](#platform-status)
 
   Translate one file or an entire RESX tree, choose any compatible model and BCP-47 locale, monitor parallel requests in real time, and write validated output without replacing the source.
 </div>
@@ -37,7 +37,7 @@
 
 ## Why ResXTranslator?
 
-ResXTranslator keeps a common localization job compact: select source content, connect an LLM provider, choose a strict-structured-output model and target locale, then translate. It is designed primarily as a native Mac utility instead of a large translation-management suite.
+ResXTranslator keeps a common localization job compact: select source content, connect an LLM provider, choose a strict-structured-output model and target locale, then translate. It is designed as a native macOS and Windows desktop utility instead of a large translation-management suite.
 
 The application can process a single `.resx`, `.csv`, or `.xlsx` file, or recursively discover source RESX files in a folder. It sends bounded batches to the selected provider, validates every structured response, and delays file writes until all network work for the job has succeeded.
 
@@ -46,11 +46,11 @@ The application can process a single `.resx`, `.csv`, or `.xlsx` file, or recurs
 ### Native workflow
 
 - Focused .NET MAUI interface with light/dark theme support and native controls.
-- File picker and recursive folder picker on Apple platforms, plus Finder drag-and-drop on macOS.
+- Native file and recursive folder pickers on macOS and Windows, plus Finder drag-and-drop on macOS.
 - Searchable language catalog generated from the platform's globalization cultures.
 - Neutral languages plus regional and script variants, identified by BCP-47 codes such as `fr-CA`, `en-SG`, and `sr-Latn`.
 - Output links that reveal generated files in the platform file manager.
-- Reduce Motion-aware progress animation on iOS and Mac Catalyst.
+- Reduce Motion-aware progress animation on macOS and Windows.
 
 ### Flexible model selection
 
@@ -140,11 +140,11 @@ The first release stores one configuration for each preset and one custom profil
 | Anthropic | [Anthropic Console](https://console.anthropic.com/settings/keys) | Uses native Messages streaming and structured outputs. |
 | Google Gemini | [Google AI Studio API keys](https://aistudio.google.com/app/apikey) | Uses native Gemini model discovery and streaming. |
 | DeepSeek | [DeepSeek API keys](https://platform.deepseek.com/api_keys) | Uses the Responses dialect for strict structured output. |
-| Ollama | [Install and run Ollama separately](https://docs.ollama.com/) | Mac Catalyst only; defaults to `http://localhost:11434/v1/`. |
-| LM Studio | [Start LM Studio's local server](https://lmstudio.ai/docs/developer/core/server) | Mac Catalyst only; defaults to `http://localhost:1234/v1/`. |
+| Ollama | [Install and run Ollama separately](https://docs.ollama.com/) | macOS and Windows; defaults to `http://localhost:11434/v1/`. |
+| LM Studio | [Start LM Studio's local server](https://lmstudio.ai/docs/developer/core/server) | macOS and Windows; defaults to `http://localhost:1234/v1/`. |
 | Custom OpenAI-compatible | Provider-specific | HTTPS is accepted anywhere; HTTP is limited to loopback/private-network hosts. The bearer key is optional. |
 
-ResXTranslator does not discover, install, start, stop, or manage a local inference server. Ollama and LM Studio endpoints can be edited for a private LAN host. Other app targets expose the cloud presets and custom HTTPS endpoint, but not the local presets in this release.
+ResXTranslator does not discover, install, start, stop, or manage a local inference server. Both desktop targets expose Ollama and LM Studio, and their endpoints can be edited for a private LAN host.
 
 Every provider also supports an exact manual model ID. A model remains blocked until a small request proves that the endpoint honors the required strict JSON Schema and preserves several non-sequential IDs exactly. Successful results are cached for the provider, endpoint, model, and schema-contract version; changing any of them invalidates the cache.
 
@@ -164,13 +164,13 @@ The pipeline is deliberately conservative:
 6. Retry only eligible transient direct-provider failures, or use OpenRouter's distinct-route recovery; never switch configured providers.
 7. Write files only after the complete queue validates.
 
-Concurrency can be set from 1 through 10 independently for every provider. Cloud providers default to four and Mac local engines default to one. For OpenRouter only, free and unknown/variable-price models use the conservative two-request limit; catalog-supplied fixed pricing is displayed. Other providers show **Pricing managed by provider**. Up to four active requests are shown individually in the compact progress area; any additional active requests are summarized.
+Concurrency can be set from 1 through 10 independently for every provider. Cloud providers default to four and local engines default to one. For OpenRouter only, free and unknown/variable-price models use the conservative two-request limit; catalog-supplied fixed pricing is displayed. Other providers show **Pricing managed by provider**. Up to four active requests are shown individually in the compact progress area; any additional active requests are summarized.
 
 ## Data, credentials, and diagnostics
 
 Using a cloud or LAN endpoint sends the selected source strings, target locale, model ID, and translation instructions to that endpoint. OpenRouter may additionally route the request to the model provider. Provider terms, privacy policies, rate limits, retention, and charges apply. A local endpoint keeps inference local only to the extent guaranteed by the separately managed server and model.
 
-- **API keys:** Stored separately per provider in the macOS login Keychain for local Mac Catalyst builds. Other platforms use .NET MAUI `SecureStorage`. Keys are never stored in application preferences or shown again after the connection sheet closes.
+- **API keys:** Stored separately per provider in the macOS login Keychain for local Mac Catalyst builds and in .NET MAUI `SecureStorage` on Windows. Keys are never stored in application preferences or shown again after the connection sheet closes.
 - **Ordinary preferences:** The active provider, endpoints, selected model IDs, compatibility fingerprints, per-provider concurrency, and custom domain-and-tone instructions are stored in ordinary app preferences. Existing OpenRouter model and concurrency settings migrate idempotently and OpenRouter remains active after upgrade.
 - **Translation content:** Held in memory while a job runs. The app does not write partial current-job translations before the full queue validates.
 - **Diagnostics:** The local log records timestamps, short request/session IDs, model and locale metadata, counts, routing stages, token totals, response sizes, durations, and exception messages. Callers are designed not to log credentials, headers, prompts, or source/translated string content.
@@ -180,36 +180,29 @@ Using a cloud or LAN endpoint sends the selected source strings, target locale, 
 
 | Platform | Target framework | Configured minimum | Status |
 |---|---|---:|---|
-| macOS via Mac Catalyst | `net10.0-maccatalyst` | 15.0 | Primary development and documented runtime target |
-| iOS | `net10.0-ios` | 15.0 | Project target; compile-validated, not device-verified |
-| Android | `net10.0-android` | API 21 | Project target; compile-validated, not device-verified |
-| Windows | `net10.0-windows10.0.19041.0` | Windows 10 build 17763 | Declared when building on Windows; not verified by this repository |
-| Tizen | Disabled template target | 6.5 | Platform files remain, but the target framework is commented out |
+| macOS via Mac Catalyst | `net10.0-maccatalyst` | Mac Catalyst 15.0 | Primary development and runtime target |
+| Windows | `net10.0-windows10.0.19041.0` | Windows 10 build 17763 | Desktop target; build and runtime validation require Windows |
 
-Folder selection uses a native folder picker on iOS and Mac Catalyst. On other enabled targets, choosing a folder falls back to choosing any RESX file within that folder because .NET MAUI has no dependency-free cross-platform folder picker in this project.
+Folder selection uses the native document picker on Mac Catalyst and the WinRT folder picker on Windows.
 
 ## Build and run
 
 ### Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). The project currently has no `global.json`, so your installed SDK selection rules apply.
-- macOS with the Xcode command-line tools and full Xcode installation for Mac Catalyst/iOS builds.
+- macOS with the Xcode command-line tools and full Xcode installation for Mac Catalyst builds, or Windows with the .NET MAUI Visual Studio workload.
 - The platform workload you intend to build.
-- Credentials for a supported cloud provider, or a separately installed and running Ollama/LM Studio server on Mac Catalyst.
+- Credentials for a supported cloud provider, or a separately installed and running Ollama/LM Studio server on the desktop or private LAN.
 
-Install only the Mac Catalyst MAUI workload:
+On macOS, install only the Mac Catalyst MAUI workload:
 
 ```bash
 sudo dotnet workload install maui-maccatalyst
 ```
 
-Or install the complete MAUI workload set supported by your host:
-
-```bash
-sudo dotnet workload install maui
-```
-
 Whether `sudo` is needed depends on how and where the .NET SDK was installed. Confirm the result with `dotnet workload list`.
+
+On Windows, install the **.NET Multi-platform App UI development** workload in Visual Studio Installer, or install the host-supported MAUI workload with `dotnet workload install maui`.
 
 ### Clone and restore
 
@@ -240,7 +233,16 @@ Debug builds default to the current Mac's architecture, such as `maccatalyst-arm
 ResXTranslator/bin/Debug/net10.0-maccatalyst/<runtime-identifier>/ResXTranslator.app
 ```
 
-To compile another enabled platform, replace the target framework with `net10.0-ios` or `net10.0-android`; build the Windows target on Windows. Apple targets set `CreatePackage=false` for local development, so distribution signing and packaging are outside the current project setup.
+### Build for Windows
+
+Run on Windows:
+
+```powershell
+dotnet build ResXTranslator/ResXTranslator.csproj `
+  -f net10.0-windows10.0.19041.0
+```
+
+The project selects the Windows target on Windows and the Mac Catalyst target on macOS. Mac Catalyst sets `CreatePackage=false`, and Windows uses an unpackaged build; distribution signing and installers are outside the current project setup.
 
 ## Project structure
 
@@ -252,7 +254,7 @@ To compile another enabled platform, replace the target framework with `net10.0-
 | `ResXTranslator/LlmClient.cs` | Provider-neutral strict-schema probes, domain generation, translation validation, and OpenRouter delegation |
 | `ResXTranslator/OpenRouterClient.cs` | OpenRouter-specific catalog, streaming, pricing, and five-route recovery |
 | `ResXTranslator/TranslationSettingsPage.xaml(.cs)` | Domain-and-tone editing, AI prompt assistance, and per-provider concurrency |
-| `ResXTranslator/LlmCredentialStore.cs` | Per-provider Keychain/SecureStorage credential persistence and legacy migration |
+| `ResXTranslator/LlmCredentialStore.cs` | Per-provider macOS Keychain/Windows SecureStorage credential persistence and legacy migration |
 | `ResXTranslator/LanguageCatalog.cs` | Searchable platform culture catalog and BCP-47 target metadata |
 | `ResXTranslator/ResXParser.cs` | Plain-string RESX reading and localized RESX writing |
 | `ResXTranslator/TranslationSpreadsheetDocument.cs` | CSV/XLSX schema validation, language-column insertion, and format-preserving workbook export |
@@ -318,7 +320,7 @@ The source directory was probably not writable. For single-file jobs, check `Doc
 
 - Core localization and response safeguards are intentionally not editable; only domain-and-tone guidance can be customized.
 - One target language is added per run.
-- Translation is not deterministic. Offline operation requires a separately managed Ollama or LM Studio server on Mac Catalyst and a compatible local model.
+- Translation is not deterministic. Offline operation requires a separately managed Ollama or LM Studio server on macOS or Windows and a compatible local model.
 - Strict JSON Schema is mandatory; JSON-only or prompt-only models are rejected by the compatibility test.
 - There is one saved profile per preset and one custom endpoint; automatic fallback chains and multiple named profiles are not supported.
 - Model pricing shown in the app is catalog metadata, not a final cost guarantee.

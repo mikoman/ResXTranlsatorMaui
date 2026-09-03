@@ -1,4 +1,4 @@
-#if IOS || MACCATALYST
+#if MACCATALYST
 using Microsoft.Maui.Platform;
 using UIKit;
 #endif
@@ -6,14 +6,14 @@ using UIKit;
 namespace ResXTranslator.Controls;
 
 /// <summary>
-/// An <see cref="Image"/> that renders a real SF Symbol on Apple platforms.
+/// An <see cref="Image"/> that renders a native symbol on each desktop platform.
 /// </summary>
 /// <remarks>
-/// Painted by a handler mapper (see MauiProgram) rather than a custom
+/// Mac symbols are painted by a handler mapper (see MauiProgram) rather than a custom
 /// <c>IImageSourceService</c>: the service route works but costs ~4x the code to
 /// buy symbol support in arbitrary Image.Source bindings, which a single-page app
 /// does not need. There is no supported font trick — SF Symbols live in private
-/// system fonts. Non-Apple platforms render nothing and the layout absorbs it.
+/// system fonts. Windows uses the equivalent Segoe Fluent Icons glyph.
 /// </remarks>
 class SymbolImage : Image
 {
@@ -64,7 +64,7 @@ class SymbolImage : Image
         set => SetValue(BoldProperty, value);
     }
 
-#if IOS || MACCATALYST
+#if MACCATALYST
     internal UIImage? Render()
     {
         if (string.IsNullOrEmpty(Symbol))
@@ -90,6 +90,42 @@ class SymbolImage : Image
     }
 #endif
 
-    static void OnSymbolChanged(BindableObject bindable, object oldValue, object newValue) =>
-        ((SymbolImage)bindable).Handler?.UpdateValue(SymbolMapperKey);
+    static void OnSymbolChanged(BindableObject bindable, object oldValue, object newValue)
+    {
+        var symbol = (SymbolImage)bindable;
+#if WINDOWS
+        symbol.Source = symbol.RenderWindows();
+#endif
+        symbol.Handler?.UpdateValue(SymbolMapperKey);
+    }
+
+#if WINDOWS
+    FontImageSource? RenderWindows()
+    {
+        var glyph = Symbol switch
+        {
+            "checkmark" => "\uE73E",
+            "checkmark.circle.fill" => "\uE930",
+            "doc.badge.plus" => "\uE710",
+            "doc.text.fill" => "\uE8A5",
+            "exclamationmark.triangle.fill" => "\uE7BA",
+            "folder.fill" => "\uE8B7",
+            "gearshape.fill" => "\uE713",
+            "info.circle.fill" => "\uE946",
+            "key.fill" => "\uE192",
+            "magnifyingglass" => "\uE721",
+            _ => null
+        };
+
+        return glyph is null
+            ? null
+            : new FontImageSource
+            {
+                Glyph = glyph,
+                FontFamily = "Segoe Fluent Icons",
+                Size = PointSize,
+                Color = Tint ?? Colors.Black
+            };
+    }
+#endif
 }

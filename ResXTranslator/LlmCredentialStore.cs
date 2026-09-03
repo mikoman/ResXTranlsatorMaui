@@ -7,7 +7,8 @@ namespace ResXTranslator;
 /// <summary>
 /// Stores one credential per provider. Unsigned local Mac Catalyst builds use
 /// the macOS Keychain command because direct Keychain API access requires an
-/// entitlement and provisioning profile. Secrets are passed on standard input.
+/// entitlement and provisioning profile. Windows uses MAUI SecureStorage.
+/// Secrets passed to the macOS command are written on standard input.
 /// </summary>
 static class LlmCredentialStore
 {

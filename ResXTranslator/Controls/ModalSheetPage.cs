@@ -1,4 +1,4 @@
-#if IOS || MACCATALYST
+#if MACCATALYST
 using CoreGraphics;
 using UIKit;
 #endif
@@ -6,8 +6,8 @@ using UIKit;
 namespace ResXTranslator.Controls;
 
 /// <summary>
-/// A focused modal surface that uses Apple's form-sheet presentation while
-/// retaining MAUI's normal modal-page behaviour on other platforms.
+/// A focused modal surface that uses a Mac form-sheet presentation while
+/// retaining MAUI's normal modal-page behaviour on Windows.
 /// </summary>
 class ModalSheetPage : ContentPage
 {
@@ -19,7 +19,7 @@ class ModalSheetPage : ContentPage
     {
         base.OnHandlerChanged();
 
-#if IOS || MACCATALYST
+#if MACCATALYST
         if (Handler?.PlatformView is UIViewController controller)
         {
             controller.ModalPresentationStyle = UIModalPresentationStyle.FormSheet;

@@ -425,7 +425,7 @@
          ========================================================== -->
 
     <!-- Card. StrokeShape must be set explicitly: the implicit Border style
-         forces Rectangle. StrokeThickness stays an integer because MAUI's iOS
+         forces Rectangle. StrokeThickness stays an integer because Mac Catalyst's
          ContentView masks content by 2 x StrokeThickness through a CAShapeLayer,
          and fractional values put that mask on sub-pixel geometry. -->
     <Style TargetType="Border" x:Key="Card">
